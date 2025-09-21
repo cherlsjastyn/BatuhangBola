@@ -50,6 +50,22 @@
   const restartBtn = document.getElementById('restartBtn');
   const menuBtn = document.getElementById('menuBtn');
 
+  // Ability UI
+  const abilityBar = document.createElement('div');
+  abilityBar.id = 'abilityBar';
+  abilityBar.className = 'ability-bar hidden';
+  abilityBar.innerHTML = `
+    <div class="ability-group">
+      <button id="ability1" class="ability-btn" disabled>Ability 1</button>
+      <span class="ability-count">2</span>
+    </div>
+    <div class="ability-group">
+      <button id="ability2" class="ability-btn" disabled>Ability 2</button>
+      <span class="ability-count">2</span>
+    </div>
+  `;
+  document.body.appendChild(abilityBar);
+
   // --- Navigation Functions ---
   function showPage(page) {
     // Hide all pages
@@ -210,11 +226,22 @@ btnLeaderboard.addEventListener('click', async () => {
     endY: 0
   };
 
+  // Obstacles
+  let obstacles = [];
+
+  // Ability keys
+  const ABILITY_KEYS = {
+    player1: { ability1: 'KeyZ', ability2: 'KeyX' },
+    player2: { ability1: 'KeyN', ability2: 'KeyM' },
+    player3: { ability1: 'BracketLeft', ability2: 'BracketRight' },
+    player4: { ability1: 'Numpad0', ability2: 'Numpad1' }
+  };
+
   // Difficulty settings
   const DIFF = {
     easy: { react: 900, success: 0.45, speed: 0.8 },
-    medium: { react: 500, success: 0.7, speed: 1.0 },
-    hard: { react: 250, success: 0.9, speed: 1.25 }
+    medium: { react: 500, success: 0.7, speed: 1.0, obstacles: true },
+    hard: { react: 250, success: 0.9, speed: 1.0, obstacles: true, fastBalls: true } // Removed dodger speed boost
   };
 
   // Controls mapping - Updated for new thrower controls
@@ -234,9 +261,118 @@ btnLeaderboard.addEventListener('click', async () => {
   window.addEventListener('keydown', e => { keyState[e.code] = true; });
   window.addEventListener('keyup', e => { keyState[e.code] = false; });
 
+  // --- Obstacle Class ---
+  class Obstacle {
+    constructor(x, y, width, height, type) {
+      this.x = x;
+      this.y = y;
+      this.width = width;
+      this.height = height;
+      this.type = type; // 'static' or 'moving'
+      this.speed = type === 'moving' ? (Math.random() * 2 + 1) : 0;
+      this.direction = Math.random() > 0.5 ? 1 : -1;
+    }
+    
+    update(dt) {
+      if (this.type === 'moving') {
+        this.x += this.speed * this.direction * (dt / 1000);
+        
+        // Reverse direction at boundaries
+        if (this.x < 0 || this.x + this.width > W) {
+          this.direction *= -1;
+        }
+      }
+    }
+    
+    draw() {
+      ctx.save();
+      ctx.fillStyle = 'rgba(100, 100, 100, 0.7)';
+      ctx.fillRect(this.x, this.y, this.width, this.height);
+      
+      // Add some visual details
+      ctx.strokeStyle = 'rgba(50, 50, 50, 0.9)';
+      ctx.lineWidth = 2;
+      ctx.strokeRect(this.x, this.y, this.width, this.height);
+      
+      ctx.restore();
+    }
+  }
+
+  // --- Ability Class ---
+  class Ability {
+    constructor(player, type, key, uses = 2) {
+      this.player = player;
+      this.type = type;
+      this.key = key;
+      this.uses = uses;
+      this.maxUses = uses;
+      this.cooldown = 0;
+    }
+    
+    activate() {
+      if (this.uses <= 0 || this.cooldown > 0) return false;
+      
+      this.uses--;
+      this.cooldown = 180; // 3 seconds at 60fps
+      
+      // Apply ability effect based on type
+      switch(this.type) {
+        case 'speedBoost':
+          this.player.speedMultiplier = 1.8;
+          setTimeout(() => {
+            this.player.speedMultiplier = 1;
+          }, 3000);
+          break;
+          
+        case 'temporaryShield':
+          this.player.shielded = true;
+          setTimeout(() => {
+            this.player.shielded = false;
+          }, 3000);
+          break;
+          
+        case 'freeze':
+          // Freeze all opponents for 2 seconds
+          if (this.player.isThrower) {
+            dodgers.forEach(d => {
+              d.frozen = true;
+              setTimeout(() => {
+                d.frozen = false;
+              }, 2000);
+            });
+          } else {
+            throwers.forEach(t => {
+              t.frozen = true;
+              setTimeout(() => {
+                t.frozen = false;
+              }, 2000);
+            });
+          }
+          break;
+          
+        case 'rapidFire':
+          if (this.player.isThrower) {
+            this.player.rapidFire = true;
+            setTimeout(() => {
+              this.player.rapidFire = false;
+            }, 3000);
+          }
+          break;
+      }
+      
+      return true;
+    }
+    
+    update() {
+      if (this.cooldown > 0) {
+        this.cooldown--;
+      }
+    }
+  }
+
   // --- Entity Creation Functions ---
-  function createHumanThrower(name, controlSet, color, isTop) {
-    return {
+  function createHumanThrower(name, controlSet, color, isTop, playerIndex) {
+    const player = {
       id: `human-throw-${Math.random().toString(36).slice(2,6)}`,
       name,
       x: W * 0.5,
@@ -247,8 +383,28 @@ btnLeaderboard.addEventListener('click', async () => {
       alive: true,
       speedMultiplier: 1,
       isTop: isTop,
-      aimAngle: isTop ? Math.PI/2 : -Math.PI/2 // Default aim straight down/up
+      isThrower: true,
+      aimAngle: isTop ? Math.PI/2 : -Math.PI/2,
+      abilities: [],
+      shielded: false,
+      frozen: false,
+      rapidFire: false
     };
+    
+    // Add abilities based on player index
+    if (playerIndex === 0) {
+      player.abilities = [
+        new Ability(player, 'rapidFire', ABILITY_KEYS.player1.ability1),
+        new Ability(player, 'freeze', ABILITY_KEYS.player1.ability2)
+      ];
+    } else if (playerIndex === 1) {
+      player.abilities = [
+        new Ability(player, 'rapidFire', ABILITY_KEYS.player2.ability1),
+        new Ability(player, 'freeze', ABILITY_KEYS.player2.ability2)
+      ];
+    }
+    
+    return player;
   }
 
   function createAIThrower(name, color, isTop) {
@@ -262,55 +418,103 @@ btnLeaderboard.addEventListener('click', async () => {
       alive: true,
       speedMultiplier: 1,
       isTop: isTop,
-      direction: Math.random() > 0.5 ? 1 : -1 // Initialize AI direction
+      isThrower: true,
+      direction: Math.random() > 0.5 ? 1 : -1,
+      rapidFire: false
     };
   }
 
-function createHumanDodger(name, controlSet, color, startX) {
-  // Calculate middle area between throwers
-  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-  const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
-  
-  return {
-    id: `human-dod-${Math.random().toString(36).slice(2,6)}`,
-    name,
-    x: startX,
-    y: middleY, // Start in the middle of the extended area
-    isHuman: true,
-    control: controlSet,
-    color,
-    alive: true,
-    speedMultiplier: 1,
-    lastReact: 0,
-    scoredOnThisBall: false
-  };
-}
+  function createHumanDodger(name, controlSet, color, startX, playerIndex) {
+    // Calculate middle area between throwers
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
+    
+    const player = {
+      id: `human-dod-${Math.random().toString(36).slice(2,6)}`,
+      name,
+      x: startX,
+      y: middleY, // Start in the middle of the extended area
+      isHuman: true,
+      control: controlSet,
+      color,
+      alive: true,
+      speedMultiplier: 1,
+      lastReact: 0,
+      scoredOnThisBall: false,
+      isThrower: false,
+      abilities: [],
+      shielded: false,
+      frozen: false
+    };
+    
+    // Add abilities based on player index
+    if (playerIndex === 0) {
+      player.abilities = [
+        new Ability(player, 'speedBoost', ABILITY_KEYS.player1.ability1),
+        new Ability(player, 'temporaryShield', ABILITY_KEYS.player1.ability2)
+      ];
+    } else if (playerIndex === 1) {
+      player.abilities = [
+        new Ability(player, 'speedBoost', ABILITY_KEYS.player2.ability1),
+        new Ability(player, 'temporaryShield', ABILITY_KEYS.player2.ability2)
+      ];
+    } else if (playerIndex === 2) {
+      player.abilities = [
+        new Ability(player, 'speedBoost', ABILITY_KEYS.player3.ability1),
+        new Ability(player, 'temporaryShield', ABILITY_KEYS.player3.ability2)
+      ];
+    } else if (playerIndex === 3) {
+      player.abilities = [
+        new Ability(player, 'speedBoost', ABILITY_KEYS.player4.ability1),
+        new Ability(player, 'temporaryShield', ABILITY_KEYS.player4.ability2)
+      ];
+    }
+    
+    return player;
+  }
 
-function createAIDodger(name, color, startX) {
-  // Calculate middle area between throwers
-  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-  const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
-  
-  return {
-    id: `ai-dod-${Math.random().toString(36).slice(2,6)}`,
-    name,
-    x: startX,
-    y: middleY, // Start in the middle of the extended area
-    isHuman: false,
-    color,
-    alive: true,
-    speedMultiplier: 1,
-    lastReact: 0,
-    scoredOnThisBall: false
-  };
-}
+  function createAIDodger(name, color, startX) {
+    // Calculate middle area between throwers
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
+    
+    return {
+      id: `ai-dod-${Math.random().toString(36).slice(2,6)}`,
+      name,
+      x: startX,
+      y: middleY, // Start in the middle of the extended area
+      isHuman: false,
+      color,
+      alive: true,
+      speedMultiplier: 1,
+      lastReact: 0,
+      scoredOnThisBall: false,
+      isThrower: false,
+      shielded: false,
+      frozen: false
+    };
+  }
 
   // --- Drawing Functions ---
   function drawHuman(p, isThrower = false) {
     const x = p.x, y = p.y;
     ctx.save();
+    
+    // Draw shield if active
+    if (p.shielded) {
+      ctx.fillStyle = 'rgba(0, 150, 255, 0.2)';
+      ctx.beginPath();
+      ctx.arc(x, y, 30, 0, Math.PI*2);
+      ctx.fill();
+      
+      ctx.strokeStyle = 'rgba(0, 150, 255, 0.8)';
+      ctx.lineWidth = 2;
+      ctx.beginPath();
+      ctx.arc(x, y, 30, 0, Math.PI*2);
+      ctx.stroke();
+    }
     
     // Shadow
     ctx.fillStyle = 'rgba(0,0,0,0.12)';
@@ -384,37 +588,41 @@ function createAIDodger(name, color, startX) {
     ctx.restore();
   }
 
-function drawCourt() {
-  // Court markings
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.lineWidth = 3;
-  ctx.beginPath();
-  ctx.moveTo(0, H/2);
-  ctx.lineTo(W, H/2);
-  ctx.stroke();
-  
-  ctx.beginPath();
-  ctx.arc(W/2, H/2, H*0.09, 0, Math.PI*2);
-  ctx.stroke();
-  
-  // Extended dodger area (subtle background)
-  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-  
-  ctx.fillStyle = 'rgba(255,255,255,0.06)';
-  ctx.fillRect(0, topThrowerY + 30, W, bottomThrowerY - topThrowerY - 60);
-  
-  // Boundary lines for extended area
-  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
-  ctx.setLineDash([5, 5]);
-  ctx.beginPath();
-  ctx.moveTo(0, topThrowerY + 40);
-  ctx.lineTo(W, topThrowerY + 40);
-  ctx.moveTo(0, bottomThrowerY - 40);
-  ctx.lineTo(W, bottomThrowerY - 40);
-  ctx.stroke();
-  ctx.setLineDash([]);
-}
+  function drawCourt() {
+    // Court markings
+    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+    ctx.lineWidth = 3;
+    ctx.beginPath();
+    ctx.moveTo(0, H/2);
+    ctx.lineTo(W, H/2);
+    ctx.stroke();
+    
+    ctx.beginPath();
+    ctx.arc(W/2, H/2, H*0.09, 0, Math.PI*2);
+    ctx.stroke();
+    
+    // Extended dodger area (subtle background)
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    
+    ctx.fillStyle = 'rgba(255,255,255,0.06)';
+    ctx.fillRect(0, topThrowerY + 30, W, bottomThrowerY - topThrowerY - 60);
+    
+    // Boundary lines for extended area
+    ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+    ctx.setLineDash([5, 5]);
+    ctx.beginPath();
+    ctx.moveTo(0, topThrowerY + 40);
+    ctx.lineTo(W, topThrowerY + 40);
+    ctx.moveTo(0, bottomThrowerY - 40);
+    ctx.lineTo(W, bottomThrowerY - 40);
+    ctx.stroke();
+    ctx.setLineDash([]);
+    
+    // Draw obstacles
+    obstacles.forEach(obstacle => obstacle.draw());
+  }
+
   function drawThrowGuide() {
     if (!throwGuide.visible) return;
     
@@ -429,21 +637,94 @@ function drawCourt() {
     ctx.restore();
   }
 
+  // --- Obstacle Generation ---
+  function generateObstacles() {
+    const obstacleCount = difficulty === 'medium' ? 2 : 4;
+    const isThrowerMode = mode === 'thrower';
+    
+    for (let i = 0; i < obstacleCount; i++) {
+      const width = 40 + Math.random() * 60;
+      const height = 20 + Math.random() * 40;
+      
+      // Position obstacles in the middle area (dodger zone)
+      let x, y;
+      
+      if (isThrowerMode) {
+        // For thrower mode, place obstacles in the dodging area
+        x = Math.random() * (W - width);
+        y = H * 0.3 + Math.random() * (H * 0.4 - height);
+      } else {
+        // For dodger mode, place obstacles throughout the court
+        x = Math.random() * (W - width);
+        y = H * 0.2 + Math.random() * (H * 0.6 - height);
+      }
+      
+      const type = difficulty === 'hard' && Math.random() > 0.5 ? 'moving' : 'static';
+      obstacles.push(new Obstacle(x, y, width, height, type));
+    }
+  }
+
+  // --- Ability UI ---
+  function updateAbilityUI() {
+    const abilityBar = document.getElementById('abilityBar');
+    if (!abilityBar) return;
+    
+    // Show ability bar only for human players
+    const humanPlayers = [...throwers, ...dodgers].filter(p => p.isHuman);
+    if (humanPlayers.length > 0) {
+      abilityBar.classList.remove('hidden');
+      
+      // For simplicity, just show abilities for the first human player
+      const player = humanPlayers[0];
+      
+      if (player.abilities && player.abilities.length >= 2) {
+        const ability1 = document.getElementById('ability1');
+        const ability2 = document.getElementById('ability2');
+        
+        if (ability1 && ability2) {
+          // Extract key name without "Key" prefix
+          const key1 = player.abilities[0].key.replace('Key', '').replace('Numpad', 'Num');
+          const key2 = player.abilities[1].key.replace('Key', '').replace('Numpad', 'Num');
+          
+          ability1.textContent = `Ability 1 (${key1})`;
+          ability2.textContent = `Ability 2 (${key2})`;
+          
+          ability1.disabled = player.abilities[0].uses <= 0 || player.abilities[0].cooldown > 0;
+          ability2.disabled = player.abilities[1].uses <= 0 || player.abilities[1].cooldown > 0;
+          
+          const counts = abilityBar.querySelectorAll('.ability-count');
+          if (counts.length >= 2) {
+            counts[0].textContent = player.abilities[0].uses;
+            counts[1].textContent = player.abilities[1].uses;
+          }
+        }
+      }
+    } else {
+      abilityBar.classList.add('hidden');
+    }
+  }
+
   // --- Team Setup ---
   function buildTeams() {
     throwers = [];
     dodgers = [];
+    obstacles = []; // Clear previous obstacles
     difficulty = selectDifficulty.value || 'easy';
+    
+    // Add obstacles for medium and hard difficulties
+    if (difficulty !== 'easy') {
+      generateObstacles();
+    }
     
     if (mode === 'thrower') {
       humanThrowerCount = Number(selectThrowerCount.value || 1);
       
       // Create human throwers on opposite sides
       if (humanThrowerCount >= 1) {
-        throwers.push(createHumanThrower('You', controls.thrower1, '#4ac0e6', true));
+        throwers.push(createHumanThrower('You', controls.thrower1, '#4ac0e6', true, 0));
       }
       if (humanThrowerCount >= 2) {
-        throwers.push(createHumanThrower('You 2', controls.thrower2, '#7fe36a', false));
+        throwers.push(createHumanThrower('You 2', controls.thrower2, '#7fe36a', false, 1));
       }
       
       // Add AI teammates if needed
@@ -470,7 +751,7 @@ function drawCourt() {
       for (let i = 0; i < 4; i++) {
         const sx = W * (0.25 + i * 0.15);
         if (i < humanDodgerCount) {
-          dodgers.push(createHumanDodger(`You${i+1}`, controls.dodgers[i], orderColors[i], sx));
+          dodgers.push(createHumanDodger(`You${i+1}`, controls.dodgers[i], orderColors[i], sx, i));
         } else {
           dodgers.push(createAIDodger(`AI-Dodger-${i+1}`, '#ff7b7b', sx));
         }
@@ -490,7 +771,7 @@ function drawCourt() {
     dodgers.forEach(d => {
       d.reactMs = dd.react;
       d.successProb = dd.success;
-      d.speed = 1 * dd.speed;
+      d.speed = 1 * dd.speed; // Removed speed boost for dodgers in hard mode
     });
     
     // Reset game state
@@ -501,6 +782,7 @@ function drawCourt() {
     
     updateTurnLabel();
     updateControlsLegend();
+    updateAbilityUI();
   }
 
   // --- Game Mechanics ---
@@ -542,20 +824,21 @@ function drawCourt() {
     if (ballInFlight) return false;
     
     const thrower = throwers[currentThrowerIndex];
-    if (!thrower || !thrower.alive) return false;
+    if (!thrower || !thrower.alive || thrower.frozen) return false;
     
     // Calculate direction based on aim angle
     const dirX = Math.cos(thrower.aimAngle);
     const dirY = Math.sin(thrower.aimAngle);
     
     // Create ball with velocity
+    const ballSpeed = (difficulty === 'hard' && mode === 'dodger') ? 500 : 400;
     const ball = {
       id: ++ballIdCounter,
       x: thrower.x,
       y: thrower.y,
       dirX,
       dirY,
-      speed: 400,
+      speed: ballSpeed,
       ownerIndex: currentThrowerIndex
     };
     
@@ -563,97 +846,132 @@ function drawCourt() {
     ballInFlight = true;
     throwGuide.visible = false;
     
+    // If in rapid fire mode, schedule next throw
+    if (thrower.rapidFire) {
+      setTimeout(() => {
+        if (currentThrowerIndex === ball.ownerIndex && !ballInFlight) {
+          executeThrow();
+        }
+      }, 300);
+    }
+    
     return true;
   }
 
-function updateBall(dt) {
-  if (!activeBall) return;
-  
-  const speed = activeBall.speed * (dt / 1000);
-  activeBall.x += activeBall.dirX * speed;
-  activeBall.y += activeBall.dirY * speed;
-  
-  // Check collisions with dodgers
-  for (let i = 0; i < dodgers.length; i++) {
-    const d = dodgers[i];
-    if (!d.alive) continue;
+  function updateBall(dt) {
+    if (!activeBall) return;
     
-    const dx = activeBall.x - d.x;
-    const dy = activeBall.y - d.y;
-    const dist = Math.sqrt(dx * dx + dy * dy);
+    const speed = activeBall.speed * (dt / 1000);
+    activeBall.x += activeBall.dirX * speed;
+    activeBall.y += activeBall.dirY * speed;
     
-    if (dist < 26) {
-      // Hit
-      d.alive = false;
-      resolveBall({ hitIndex: i, hit: true });
-      return;
+    // Check collisions with obstacles
+    for (const obstacle of obstacles) {
+      if (activeBall.x + 10 > obstacle.x && 
+          activeBall.x - 10 < obstacle.x + obstacle.width &&
+          activeBall.y + 10 > obstacle.y &&
+          activeBall.y - 10 < obstacle.y + obstacle.height) {
+        // Ball hit an obstacle - bounce off
+        // Simple bounce logic - reverse direction
+        activeBall.dirX *= -1;
+        activeBall.dirY *= -1;
+        
+        // Add some randomness to the bounce
+        activeBall.dirX += (Math.random() - 0.5) * 0.2;
+        activeBall.dirY += (Math.random() - 0.5) * 0.2;
+        
+        // Normalize direction
+        const length = Math.sqrt(activeBall.dirX * activeBall.dirX + activeBall.dirY * activeBall.dirY);
+        activeBall.dirX /= length;
+        activeBall.dirY /= length;
+        
+        // Move ball outside the obstacle to prevent multiple collisions
+        activeBall.x += activeBall.dirX * 15;
+        activeBall.y += activeBall.dirY * 15;
+      }
     }
-  }
-  
-  // NEW: Check if ball passed dodgers (for scoring)
-  if (mode === 'dodger') {
-    const ballOwner = throwers[activeBall.ownerIndex];
-    if (ballOwner && !ballOwner.isHuman) { // Only AI throwers
-      dodgers.forEach((dodger, index) => {
-        if (dodger.alive && !dodger.scoredOnThisBall) {
-          // Check if ball has passed the dodger
-          const isBallPastDodger = 
-            (ballOwner.isTop && activeBall.y > dodger.y) || 
-            (!ballOwner.isTop && activeBall.y < dodger.y);
-          
-          if (isBallPastDodger) {
-            // Dodger successfully avoided the ball
-            if (dodger.isHuman) {
-              playerScore += 1; // Human dodger scores
+    
+    // Check collisions with dodgers
+    for (let i = 0; i < dodgers.length; i++) {
+      const d = dodgers[i];
+      if (!d.alive || d.shielded) continue;
+      
+      const dx = activeBall.x - d.x;
+      const dy = activeBall.y - d.y;
+      const dist = Math.sqrt(dx * dx + dy * dy);
+      
+      if (dist < 26) {
+        // Hit
+        d.alive = false;
+        resolveBall({ hitIndex: i, hit: true });
+        return;
+      }
+    }
+    
+    // NEW: Check if ball passed dodgers (for scoring)
+    if (mode === 'dodger') {
+      const ballOwner = throwers[activeBall.ownerIndex];
+      if (ballOwner && !ballOwner.isHuman) { // Only AI throwers
+        dodgers.forEach((dodger, index) => {
+          if (dodger.alive && !dodger.scoredOnThisBall) {
+            // Check if ball has passed the dodger
+            const isBallPastDodger = 
+              (ballOwner.isTop && activeBall.y > dodger.y) || 
+              (!ballOwner.isTop && activeBall.y < dodger.y);
+            
+            if (isBallPastDodger) {
+              // Dodger successfully avoided the ball
+              if (dodger.isHuman) {
+                playerScore += 1; // Human dodger scores
+              }
+              dodger.scoredOnThisBall = true; // Prevent multiple scores
+              updateScoreboard();
             }
-            dodger.scoredOnThisBall = true; // Prevent multiple scores
-            updateScoreboard();
           }
-        }
-      });
+        });
+      }
+    }
+    
+    // Check if ball is out of bounds
+    if (activeBall.x < -40 || activeBall.x > W + 40 || 
+        activeBall.y < -40 || activeBall.y > H + 40) {
+      resolveBall({ hit: false });
     }
   }
-  
-  // Check if ball is out of bounds
-  if (activeBall.x < -40 || activeBall.x > W + 40 || 
-      activeBall.y < -40 || activeBall.y > H + 40) {
-    resolveBall({ hit: false });
-  }
-}
 
-function resolveBall({ hit, hitIndex }) {
-  const owner = throwers[activeBall.ownerIndex];
-  if (hit && owner && owner.isHuman) {
-    playerScore += 1;
+  function resolveBall({ hit, hitIndex }) {
+    const owner = throwers[activeBall.ownerIndex];
+    if (hit && owner && owner.isHuman) {
+      playerScore += 1;
+    }
+    
+    // NEW: Reset scored flags for next ball
+    dodgers.forEach(d => d.scoredOnThisBall = false);
+    
+    activeBall = null;
+    ballInFlight = false;
+    
+    // Rotate turn
+    currentThrowerIndex = (currentThrowerIndex + 1) % throwers.length;
+    updateTurnLabel();
+    updateScoreboard();
+    
+    // If next thrower is AI, schedule their throw
+    const next = throwers[currentThrowerIndex];
+    if (next && !next.isHuman) {
+      setTimeout(() => aiThrow(next, currentThrowerIndex), 600 + Math.random() * 700);
+    }
+    
+    // Check game over
+    const anyAlive = dodgers.some(d => d.alive);
+    if (!anyAlive) endGame();
   }
-  
-  // NEW: Reset scored flags for next ball
-  dodgers.forEach(d => d.scoredOnThisBall = false);
-  
-  activeBall = null;
-  ballInFlight = false;
-  
-  // Rotate turn
-  currentThrowerIndex = (currentThrowerIndex + 1) % throwers.length;
-  updateTurnLabel();
-  updateScoreboard();
-  
-  // If next thrower is AI, schedule their throw
-  const next = throwers[currentThrowerIndex];
-  if (next && !next.isHuman) {
-    setTimeout(() => aiThrow(next, currentThrowerIndex), 600 + Math.random() * 700);
-  }
-  
-  // Check game over
-  const anyAlive = dodgers.some(d => d.alive);
-  if (!anyAlive) endGame();
-}
 
   function aiThrow(aiObj, idx) {
-    if (ballInFlight || idx !== currentThrowerIndex) return;
+    if (ballInFlight || idx !== currentThrowerIndex || aiObj.frozen) return;
     
     // Pick a random target (alive dodger)
-    const aliveDodgers = dodgers.filter(d => d.alive);
+    const aliveDodgers = dodgers.filter(d => d.alive && !d.shielded);
     if (aliveDodgers.length === 0) return;
     
     const target = aliveDodgers[Math.floor(Math.random() * aliveDodgers.length)];
@@ -665,6 +983,9 @@ function resolveBall({ hit, hitIndex }) {
     const dirX = dx / length;
     const dirY = dy / length;
     
+    // Increase ball speed for hard difficulty in dodger mode
+    const ballSpeed = (difficulty === 'hard' && mode === 'dodger') ? 500 : 400;
+    
     // Create ball
     const ball = {
       id: ++ballIdCounter,
@@ -672,79 +993,83 @@ function resolveBall({ hit, hitIndex }) {
       y: aiObj.y,
       dirX,
       dirY,
-      speed: 400,
+      speed: ballSpeed,
       ownerIndex: idx
     };
     
     activeBall = ball;
     ballInFlight = true;
+    
+    // If in rapid fire mode, schedule next throw
+    if (aiObj.rapidFire) {
+      setTimeout(() => aiThrow(aiObj, idx), 300);
+    }
   }
 
-function updateAIDodgers(dt) {
-  const aliveBall = activeBall;
-  const params = DIFF[difficulty];
-  
-  // Get thrower positions for movement boundaries
-  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-  
-  dodgers.forEach(d => {
-    if (d.isHuman || !d.alive) return;
+  function updateAIDodgers(dt) {
+    const aliveBall = activeBall;
+    const params = DIFF[difficulty];
     
-    if (!aliveBall) {
-      // Idle wandering - within extended bounds
-      d.x += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
-      d.x = Math.max(30, Math.min(W - 30, d.x));
+    // Get thrower positions for movement boundaries
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    
+    dodgers.forEach(d => {
+      if (d.isHuman || !d.alive || d.frozen) return;
       
-      // Also wander vertically within extended bounds
-      d.y += (Math.random() - 0.5) * 10 * (dt / 1000) * params.speed;
-      d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-    } else {
-      // React to ball
-      const now = Date.now();
-      if (now - (d.lastReact || 0) < d.reactMs) return;
-      
-      d.lastReact = now;
-      
-      if (Math.random() > d.successProb) {
-        // Failed reaction - move randomly within extended bounds
-        if (Math.random() > 0.6) {
-          d.x += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
-          d.x = Math.max(30, Math.min(W - 30, d.x));
-        }
-        if (Math.random() > 0.6) {
-          d.y += (Math.random() > 0.5 ? -1 : 1) * 20 * params.speed;
-          d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-        }
-      } else {
-        // Successful dodge - strategic movement within extended bounds
-        if (Math.abs(aliveBall.x - d.x) < 120) {
-          const leftSpace = d.x - 30;
-          const rightSpace = (W - 30) - d.x;
-          const dir = rightSpace > leftSpace ? 1 : -1;
-          d.x += dir * (80 * params.speed);
-          d.x = Math.max(30, Math.min(W - 30, d.x));
-        } else {
-          d.x += (W/2 - d.x) * 0.02 * params.speed;
-        }
+      if (!aliveBall) {
+        // Idle wandering - within extended bounds
+        d.x += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
+        d.x = Math.max(30, Math.min(W - 30, d.x));
         
-        // Also move vertically to avoid balls
-        if (Math.abs(aliveBall.y - d.y) < 80) {
-          const topSpace = d.y - (topThrowerY + 40);
-          const bottomSpace = (bottomThrowerY - 40) - d.y;
-          const dir = bottomSpace > topSpace ? 1 : -1;
-          d.y += dir * (60 * params.speed);
-          d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+        // Also wander vertically within extended bounds
+        d.y += (Math.random() - 0.5) * 10 * (dt / 1000) * params.speed;
+        d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+      } else {
+        // React to ball
+        const now = Date.now();
+        if (now - (d.lastReact || 0) < d.reactMs) return;
+        
+        d.lastReact = now;
+        
+        if (Math.random() > d.successProb) {
+          // Failed reaction - move randomly within extended bounds
+          if (Math.random() > 0.6) {
+            d.x += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
+            d.x = Math.max(30, Math.min(W - 30, d.x));
+          }
+          if (Math.random() > 0.6) {
+            d.y += (Math.random() > 0.5 ? -1 : 1) * 20 * params.speed;
+            d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+          }
+        } else {
+          // Successful dodge - strategic movement within extended bounds
+          if (Math.abs(aliveBall.x - d.x) < 120) {
+            const leftSpace = d.x - 30;
+            const rightSpace = (W - 30) - d.x;
+            const dir = rightSpace > leftSpace ? 1 : -1;
+            d.x += dir * (80 * params.speed);
+            d.x = Math.max(30, Math.min(W - 30, d.x));
+          } else {
+            d.x += (W/2 - d.x) * 0.02 * params.speed;
+          }
+          
+          // Also move vertically to avoid balls
+          if (Math.abs(aliveBall.y - d.y) < 80) {
+            const topSpace = d.y - (topThrowerY + 40);
+            const bottomSpace = (bottomThrowerY - 40) - d.y;
+            const dir = bottomSpace > topSpace ? 1 : -1;
+            d.y += dir * (60 * params.speed);
+            d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+          }
         }
       }
-    }
-  });
-}
+    });
+  }
 
-  // Add this new function to update AI throwers
   function updateAIThrowers(dt) {
     throwers.forEach((t, idx) => {
-      if (t.isHuman || !t.alive) return;
+      if (t.isHuman || !t.alive || t.frozen) return;
       
       // AI throwers move randomly left and right
       if (Math.random() < 0.02) {
@@ -768,123 +1093,151 @@ function updateAIDodgers(dt) {
     });
   }
 
-function updateHumans(dt) {
-  const speedBase = 300 * (dt / 1000);
-  
-  // Update human throwers
-  throwers.forEach((t, idx) => {
-    if (!t.isHuman || !t.alive) return;
+  function updateHumans(dt) {
+    const speedBase = 300 * (dt / 1000);
     
-    const set = t.control;
-    
-    // Horizontal movement only (left/right)
-    if (keyState[set.left]) t.x -= speedBase * t.speedMultiplier;
-    if (keyState[set.right]) t.x += speedBase * t.speedMultiplier;
-    
-    // Constrain movement based on position
-    t.x = Math.max(30, Math.min(W - 30, t.x));
-    
-    // Aim adjustment (up/down)
-    const aimSpeed = 0.05;
-    if (keyState[set.aimUp]) {
-      if (t.isTop) {
-        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
-      } else {
-        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
+    // Update human throwers
+    throwers.forEach((t, idx) => {
+      if (!t.isHuman || !t.alive || t.frozen) return;
+      
+      const set = t.control;
+      
+      // Horizontal movement only (left/right)
+      if (keyState[set.left]) t.x -= speedBase * t.speedMultiplier;
+      if (keyState[set.right]) t.x += speedBase * t.speedMultiplier;
+      
+      // Constrain movement based on position
+      t.x = Math.max(30, Math.min(W - 30, t.x));
+      
+      // Aim adjustment (up/down)
+      const aimSpeed = 0.05;
+      if (keyState[set.aimUp]) {
+        if (t.isTop) {
+          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
+        } else {
+          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
+        }
       }
-    }
-    if (keyState[set.aimDown]) {
-      if (t.isTop) {
-        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
-      } else {
-        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
+      if (keyState[set.aimDown]) {
+        if (t.isTop) {
+          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
+        } else {
+          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
+        }
       }
-    }
-    
-    // Handle throw key
-    if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
-      if (!keyState._throwHandled) {
-        startThrowGuide(t);
-        keyState._throwHandled = true;
+      
+      // Handle throw key
+      if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
+        if (!keyState._throwHandled) {
+          startThrowGuide(t);
+          keyState._throwHandled = true;
+        }
+      } else if (keyState._throwHandled) {
+        // Throw when key is released
+        executeThrow();
+        keyState._throwHandled = false;
       }
-    } else if (keyState._throwHandled) {
-      // Throw when key is released
-      executeThrow();
-      keyState._throwHandled = false;
-    }
+      
+      // Update throw guide if visible
+      if (throwGuide.visible && idx === currentThrowerIndex) {
+        updateThrowGuideFromAim(t);
+      }
+      
+      // Handle abilities
+      if (t.abilities) {
+        t.abilities.forEach((ability, abilityIndex) => {
+          if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
+            if (ability.activate()) {
+              updateAbilityUI();
+            }
+            keyState[`ability_${ability.key}_handled`] = true;
+          } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
+            keyState[`ability_${ability.key}_handled`] = false;
+          }
+        });
+      }
+    });
     
-    // Update throw guide if visible
-    if (throwGuide.visible && idx === currentThrowerIndex) {
-      updateThrowGuideFromAim(t);
-    }
-  });
-  
-  // Update human dodgers - EXTENDED MOVEMENT AREA
-  dodgers.forEach((d, idx) => {
-    if (!d.isHuman || !d.alive) return;
-    
-    const set = d.control;
-    if (!set) return;
-    
-    const sp = speedBase * 1.0;
-    if (keyState[set.left]) d.x -= sp;
-    if (keyState[set.right]) d.x += sp;
-    if (keyState[set.up]) d.y -= sp;
-    if (keyState[set.down]) d.y += sp;
-    
-    // EXTENDED: Allow movement across the full width of the court
-    d.x = Math.max(30, Math.min(W - 30, d.x));
-    
-    // EXTENDED: Allow vertical movement from just above bottom thrower to just below top thrower
-    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-    
-    d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-  });
-}
+    // Update human dodgers - EXTENDED MOVEMENT AREA
+    dodgers.forEach((d, idx) => {
+      if (!d.isHuman || !d.alive || d.frozen) return;
+      
+      const set = d.control;
+      if (!set) return;
+      
+      const sp = speedBase * d.speedMultiplier;
+      if (keyState[set.left]) d.x -= sp;
+      if (keyState[set.right]) d.x += sp;
+      if (keyState[set.up]) d.y -= sp;
+      if (keyState[set.down]) d.y += sp;
+      
+      // EXTENDED: Allow movement across the full width of the court
+      d.x = Math.max(30, Math.min(W - 30, d.x));
+      
+      // EXTENDED: Allow vertical movement from just above bottom thrower to just below top thrower
+      const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+      const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+      
+      d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+      
+      // Handle abilities
+      if (d.abilities) {
+        d.abilities.forEach((ability, abilityIndex) => {
+          if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
+            if (ability.activate()) {
+              updateAbilityUI();
+            }
+            keyState[`ability_${ability.key}_handled`] = true;
+          } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
+            keyState[`ability_${ability.key}_handled`] = false;
+          }
+        });
+      }
+    });
+  }
 
   function updateScoreboard() {
     const alive = dodgers.filter(d => d.alive).length;
     scoreboardEl.innerText = `Dodgers Remaining: ${alive} Score: ${playerScore}`;
   }
 
-async function endGame() {
-  gameRunning = false;
-  
-  try {
-    if (localPlayer && localPlayer.id) {
-      // Determine if player won or lost
-      const isThrower = mode === 'thrower';
-      const dodgersAlive = dodgers.filter(d => d.alive).length;
-      const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
-      
-      const response = await fetch('/api/score', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          playerId: localPlayer.id,
-          role: mode,
-          difficulty,
-          score: playerScore,
-          result: playerWon ? 'win' : 'loss'
-        })
-      });
-      
-      const result = await response.json();
-      if (!response.ok) {
-        console.warn('Score submission failed:', result.error);
-      } else {
-        console.log('Score submitted successfully:', result.message);
+  async function endGame() {
+    gameRunning = false;
+    
+    try {
+      if (localPlayer && localPlayer.id) {
+        // Determine if player won or lost
+        const isThrower = mode === 'thrower';
+        const dodgersAlive = dodgers.filter(d => d.alive).length;
+        const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
+        
+        const response = await fetch('/api/score', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            playerId: localPlayer.id,
+            role: mode,
+            difficulty,
+            score: playerScore,
+            result: playerWon ? 'win' : 'loss'
+          })
+        });
+        
+        const result = await response.json();
+        if (!response.ok) {
+          console.warn('Score submission failed:', result.error);
+        } else {
+          console.log('Score submitted successfully:', result.message);
+        }
       }
+    } catch (e) {
+      console.warn('Score submission failed', e);
     }
-  } catch (e) {
-    console.warn('Score submission failed', e);
+    
+    // Show game over modal
+    finalScoreText.textContent = `Your score: ${playerScore}`;
+    gameOverModal.classList.remove("hidden");
   }
-  
-  // Show game over modal
-  finalScoreText.textContent = `Your score: ${playerScore}`;
-  gameOverModal.classList.remove("hidden");
-}
 
   // --- Game Loop ---
   let lastTime = performance.now();
@@ -902,9 +1255,21 @@ async function endGame() {
     if (gameRunning) {
       // Update game state
       updateHumans(dt);
-      updateAIThrowers(dt); // Add this line
+      updateAIThrowers(dt);
       updateAIDodgers(dt);
+      
+      // Update obstacles
+      obstacles.forEach(obstacle => obstacle.update(dt));
+      
       updateBall(dt);
+      
+      // Update abilities
+      const allPlayers = [...throwers, ...dodgers];
+      allPlayers.forEach(player => {
+        if (player.abilities) {
+          player.abilities.forEach(ability => ability.update());
+        }
+      });
       
       // Draw entities
       throwers.forEach(t => { if (t.alive) drawHuman(t, true); });
@@ -914,6 +1279,7 @@ async function endGame() {
       
       // Update HUD
       updateScoreboard();
+      updateAbilityUI();
     }
     
     requestAnimationFrame(frame);
@@ -961,8 +1327,6 @@ async function endGame() {
     hud.classList.add('hidden');
     showPage(mainMenuPage);
   });
-
-  
 
   // Game over modal buttons
   restartBtn.addEventListener('click', () => {
