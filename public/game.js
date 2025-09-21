@@ -66,13 +66,23 @@
   showPage(nameEntryPage);
 
   // Continue button - go to main menu
-  btnContinue.addEventListener('click', () => {
-    if (!playerNameInput.value.trim()) {
-      alert('Please enter your name');
-      return;
-    }
-    showPage(mainMenuPage);
-  });
+ document.getElementById("btnContinue").addEventListener("click", () => {
+  const playerName = document.getElementById("playerName").value.trim();
+  const errorEl = document.getElementById("nameError");
+
+  if (!playerName) {
+  errorEl.classList.remove("hidden");
+  document.getElementById("playerName").classList.add("error-input"); // glow red
+  return;
+}
+
+errorEl.classList.add("hidden");
+document.getElementById("playerName").classList.remove("error-input"); // remove glow
+
+  errorEl.classList.add("hidden");        // hide error if filled
+  document.getElementById("nameEntryPage").classList.add("hidden");
+  document.getElementById("mainMenuPage").classList.remove("hidden");
+});
 
   // Start Game button - go to game options
   btnStartGame.addEventListener('click', () => {
@@ -870,6 +880,8 @@ async function endGame() {
     hud.classList.add('hidden');
     showPage(mainMenuPage);
   });
+
+  
 
   // Game over modal buttons
   restartBtn.addEventListener('click', () => {

@@ -11,14 +11,19 @@
   <canvas id="gameCanvas"></canvas>
   
   <!-- Page 1: Name Entry -->
-  <div id="nameEntryPage" class="page">
-    <div class="menu">
-      <h1>BATUHANG BOLA</h1>
-      <label>Enter Your Name</label>
-      <input id="playerName" placeholder="Your name" />
-      <button id="btnContinue" class="big">Continue</button>
-    </div>
+<div id="nameEntryPage" class="page">
+  <div class="menu">
+    <h1>BATUHANG BOLA</h1>
+    <label>Enter Your Name</label>
+    <input id="playerName" placeholder="Your name" />
+
+    <!-- ⚠️ Error message (hidden by default) -->
+    <p id="nameError" class="error hidden">⚠️ Please enter your name</p>
+
+    <button id="btnContinue" class="big">Continue</button>
   </div>
+</div>
+
   
   <!-- Page 2: Main Menu -->
   <div id="mainMenuPage" class="page hidden">
