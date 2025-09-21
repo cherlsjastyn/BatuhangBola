@@ -3,46 +3,37 @@ DATABASE:
 CREATE DATABASE IF NOT EXISTS batuhang_bola;
 USE batuhang_bola;
 -- 1️⃣ Players table
+
 CREATE TABLE IF NOT EXISTS players (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    name VARCHAR(50) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
 
--- 2️⃣ Scores table
-CREATE TABLE IF NOT EXISTS scores (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    player_id INT NOT NULL,
-    role ENUM('thrower', 'dodger') NOT NULL,
-    difficulty ENUM('easy', 'medium', 'hard') NOT NULL,
-    score INT NOT NULL DEFAULT 0,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
-);
+      CREATE TABLE IF NOT EXISTS leaderboard_stats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        player_id INT NOT NULL,
+        role ENUM('dodger', 'thrower') DEFAULT 'dodger',
+        difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'easy',
+        total_score INT DEFAULT 0,
+        games_played INT DEFAULT 0,
+        wins INT DEFAULT 0,
+        losses INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (player_id) REFERENCES players(id),
+        UNIQUE KEY unique_player_role_diff (player_id, role, difficulty)
+      );
 
--- 3️⃣ Mechanics table
-CREATE TABLE IF NOT EXISTS mechanics (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    title VARCHAR(100) NOT NULL,
-    content TEXT NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-);
-
--- 4️⃣ Leaderboard view
-CREATE OR REPLACE VIEW leaderboard AS
-SELECT 
-    p.id AS player_id,
-    p.name,
-    s.difficulty,
-    SUM(s.score) AS total_score,
-    COUNT(s.id) AS games_played
-FROM players p
-JOIN scores s ON p.id = s.player_id
-GROUP BY p.id, s.difficulty
-ORDER BY total_score DESC;
-
--- 5️⃣ Example mechanics entries
-INSERT INTO mechanics (title, content) VALUES
-('How to Play', 'Players throw a ball at dodgers. Score by hitting dodgers.'),
-('Game Modes', 'Thrower Mode: Human throws. Dodger Mode: Human dodges.'),
-('Controls', 'Thrower1: WASD + Space, Thrower2: Arrows + Numpad5. Dodgers: D1 WASD, D2 IJKL, D3 Arrows, D4 Numpad 8/5/4/6.');
+      CREATE TABLE IF NOT EXISTS mechanics (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      );
+      
+      INSERT IGNORE INTO mechanics (title, content) VALUES
+        ('Game Objective', 'Dodgers must avoid balls thrown by throwers. Throwers aim to hit dodgers with balls.'),
+        ('Controls', 'Thrower 1: A/D to move, W/S to aim, Space to throw. Thrower 2: Arrow keys to move/aim, Numpad5 to throw. Dodgers: WASD for player 1, IJKL for player 2, Arrows for player 3, Numpad for player 4.'),
+        ('Scoring', 'Throwers earn points for each dodger hit. Dodgers earn points for surviving longer.'),
+        ('Winning', 'Throwers win by hitting all dodgers. Dodgers win by surviving the time limit or all throw attempts.');

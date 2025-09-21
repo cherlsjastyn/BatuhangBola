@@ -4,94 +4,107 @@
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BATUHANG BOLA</title>
-
   <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Raleway:wght@300;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
-
-  <div id="menu" class="menu">
-    <h1>BATUHANG BOLA</h1>
-
-    <label style="color:#fff">Your name</label>
-    <input id="playerName" placeholder="Enter your name" />
-
-    <div class="section">
-      <label style="color:#fff">Mode</label>
-      <div>
-        <button id="btnModeThrower" class="modeBtn">Thrower</button>
-        <button id="btnModeDodger" class="modeBtn">Dodger</button>
-      </div>
+  
+  <!-- Page 1: Name Entry -->
+  <div id="nameEntryPage" class="page">
+    <div class="menu">
+      <h1>BATUHANG BOLA</h1>
+      <label>Enter Your Name</label>
+      <input id="playerName" placeholder="Your name" />
+      <button id="btnContinue" class="big">Continue</button>
     </div>
-
-    <div id="throwerOptions" class="section hidden">
-      <label style="color:#fff">How many human throwers?</label>
-      <select id="selectThrowerCount">
-        <option value="1">1 human (+1 AI teammate)</option>
-        <option value="2">2 humans (no AI teammate)</option>
-      </select>
-    </div>
-
-    <div id="dodgerOptions" class="section hidden">
-      <label style="color:#fff">How many human dodgers?</label>
-      <select id="selectDodgerCount">
-        <option value="1">1</option>
-        <option value="2">2</option>
-        <option value="3">3</option>
-        <option value="4">4</option>
-      </select>
-    </div>
-
-    <div class="section">
-      <label style="color:#fff">Difficulty</label>
-      <select id="selectDifficulty">
-        <option value="easy">easy</option>
-        <option value="medium">medium</option>
-        <option value="hard">hard</option>
-      </select>
-    </div>
-
-    <div style="margin-top:12px">
-      <button id="btnStart" class="big">Start Game</button>
-    </div>
-
-    <div style="margin-top:12px">
+  </div>
+  
+  <!-- Page 2: Main Menu -->
+  <div id="mainMenuPage" class="page hidden">
+    <div class="menu">
+      <h1>BATUHANG BOLA</h1>
+      <button id="btnStartGame" class="big">Start Game</button>
       <button id="btnMechanics">Mechanics</button>
       <button id="btnLeaderboard">Leaderboard</button>
     </div>
   </div>
-
+  
+  <!-- Page 3: Game Options -->
+  <div id="gameOptionsPage" class="page hidden">
+    <div class="menu">
+      <h1>Game Options</h1>
+      <div class="section">
+        <label>Mode</label>
+        <div>
+          <button id="btnModeThrower" class="modeBtn">Thrower</button>
+          <button id="btnModeDodger" class="modeBtn">Dodger</button>
+        </div>
+      </div>
+      <div id="throwerOptions" class="section hidden">
+        <label>How many human throwers?</label>
+        <select id="selectThrowerCount">
+          <option value="1">1 human (+1 AI teammate)</option>
+          <option value="2">2 humans (no AI teammate)</option>
+        </select>
+      </div>
+      <div id="dodgerOptions" class="section hidden">
+        <label>How many human dodgers?</label>
+        <select id="selectDodgerCount">
+          <option value="1">1</option>
+          <option value="2">2</option>
+          <option value="3">3</option>
+          <option value="4">4</option>
+        </select>
+      </div>
+      <div class="section">
+        <label>Difficulty</label>
+        <select id="selectDifficulty">
+          <option value="easy">easy</option>
+          <option value="medium">medium</option>
+          <option value="hard">hard</option>
+        </select>
+      </div>
+      <div style="margin-top:12px">
+        <button id="btnPlay" class="big">Play</button>
+      </div>
+      <div style="margin-top:12px">
+        <button id="btnBackToMenu">Back to Menu</button>
+      </div>
+    </div>
+  </div>
+  
+  <!-- HUD (only visible during gameplay) -->
   <div id="hud" class="hud hidden">
     <div id="scoreboard" class="scoreboard">Dodgers Remaining: 0</div>
     <div id="turnLabel" class="turnLabel">Turn: —</div>
     <div id="controlsLegend" class="controlsLegend"></div>
     <button id="btnExit" class="small">Exit to Menu</button>
   </div>
-
+  
+  <!-- Modals -->
   <div id="mechanicsModal" class="modal hidden">
     <h3>Mechanics</h3>
     <div id="mechanicsContent"></div>
     <button id="closeMechanics">Close</button>
   </div>
-
+  
   <div id="leaderboardModal" class="modal hidden">
     <h3>Leaderboard</h3>
     <div id="leaderboardContent"></div>
     <button id="closeLeaderboard">Close</button>
   </div>
-
-<div id="gameOverModal" class="modal hidden">
-  <div class="modal-content">
-    <h2>Game Over</h2>
-    <p id="finalScoreText">Your score: 0</p>
-    <div class="modal-buttons">
-      <button id="restartBtn">Restart</button>
-      <button id="menuBtn">Main Menu</button>
+  
+  <div id="gameOverModal" class="modal hidden">
+    <div class="modal-content">
+      <h2>Game Over</h2>
+      <p id="finalScoreText">Your score: 0</p>
+      <div class="modal-buttons">
+        <button id="restartBtn">Restart</button>
+        <button id="menuBtn">Main Menu</button>
+      </div>
     </div>
   </div>
-</div>
-
 
   <script src="/game.js"></script>
 </body>

@@ -42,17 +42,6 @@ canvas {
 .controlsLegend { background:var(--panel); padding:8px 12px; border-radius:8px; max-width:420px }
 .small { padding:6px 10px; border-radius:6px; border:none; background:#444; color:#fff }
 
-.modal {
-  position:absolute; left:50%; top:50%; transform:translate(-50%,-50%);
-  background:#fff; padding:16px; border-radius:10px; z-index:60; min-width:320px; box-shadow:0 8px 32px rgba(0,0,0,0.3)
-}
-
-/* small responsive */
-@media (max-width:520px){
-  .menu { width:92vw; min-width:unset; padding:16px }
-  .menu h1 { font-size:36px }
-  .controlsLegend { display:none }
-}
 /* Modal */
 .modal {
   position: fixed;
@@ -117,4 +106,79 @@ canvas {
 
 #menuBtn:hover {
   background: #c82333;
+}
+
+/* Page container styles */
+.page {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.page.hidden {
+  display: none;
+}
+
+/* Additional styles for thrower guide */
+.guide-line {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.5);
+  pointer-events: none;
+  z-index: 30;
+}
+
+/* Mechanics and Leaderboard modals */
+#mechanicsModal, #leaderboardModal {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: white;
+  padding: 20px;
+  border-radius: 10px;
+  z-index: 2000;
+  max-width: 500px;
+  width: 90%;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+#mechanicsModal h3, #leaderboardModal h3 {
+  margin-top: 0;
+  text-align: center;
+  color: #333;
+}
+
+#mechanicsContent, #leaderboardContent {
+  margin: 15px 0;
+  line-height: 1.5;
+}
+
+#closeMechanics, #closeLeaderboard {
+  display: block;
+  margin: 0 auto;
+  padding: 8px 16px;
+  background: #2b6ea3;
+  color: white;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+}
+
+/* small responsive */
+@media (max-width:520px){
+  .menu { width:92vw; min-width:unset; padding:16px }
+  .menu h1 { font-size:36px }
+  .controlsLegend { display:none }
+  #mechanicsModal, #leaderboardModal { 
+    width: 95%; 
+    padding: 15px;
+  }
 }

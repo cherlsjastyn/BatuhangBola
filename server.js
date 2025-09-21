@@ -6,13 +6,11 @@ const cors = require('cors');
 const path = require('path');
 
 const app = express();
-app.use(cors()); // TODO: restrict origin in production
+app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// -----------------
 // MySQL pool
-// -----------------
 const pool = mysql.createPool({
   host: process.env.DB_HOST || '127.0.0.1',
   user: process.env.DB_USER || 'root',
@@ -26,15 +24,52 @@ const pool = mysql.createPool({
 pool.getConnection()
   .then(conn => {
     console.log("✅ MySQL connected");
-    conn.release();
+    
+    // Initialize database tables if they don't exist
+    const initQueries = [
+      `CREATE TABLE IF NOT EXISTS players (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        name VARCHAR(255) NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `CREATE TABLE IF NOT EXISTS leaderboard_stats (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        player_id INT NOT NULL,
+        role ENUM('dodger', 'thrower') DEFAULT 'dodger',
+        difficulty ENUM('easy', 'medium', 'hard') DEFAULT 'easy',
+        total_score INT DEFAULT 0,
+        games_played INT DEFAULT 0,
+        wins INT DEFAULT 0,
+        losses INT DEFAULT 0,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+        updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
+        FOREIGN KEY (player_id) REFERENCES players(id),
+        UNIQUE KEY unique_player_role_diff (player_id, role, difficulty)
+      )`,
+      `CREATE TABLE IF NOT EXISTS mechanics (
+        id INT AUTO_INCREMENT PRIMARY KEY,
+        title VARCHAR(255) NOT NULL,
+        content TEXT NOT NULL,
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+      )`,
+      `INSERT IGNORE INTO mechanics (title, content) VALUES
+        ('Game Objective', 'Dodgers must avoid balls thrown by throwers. Throwers aim to hit dodgers with balls.'),
+        ('Controls', 'Thrower 1: A/D to move, W/S to aim, Space to throw. Thrower 2: Arrows to move/aim, Numpad5 to throw. Dodgers: WASD for player 1, IJKL for player 2, Arrows for player 3, Numpad for player 4.'),
+        ('Scoring', 'Throwers earn points for each dodger hit. Dodgers earn points for surviving longer.'),
+        ('Winning', 'Throwers win by hitting all dodgers. Dodgers win by surviving the time limit or all throw attempts.')`
+    ];
+    
+    return Promise.all(initQueries.map(query => conn.execute(query)))
+      .then(() => {
+        console.log("✅ Database tables initialized");
+        conn.release();
+      });
   })
   .catch(err => {
     console.error("❌ MySQL connection failed:", err.message);
   });
 
-// -----------------
 // Helpers
-// -----------------
 async function createPlayer(name) {
   const [res] = await pool.query('INSERT INTO players (name) VALUES (?)', [name]);
   const id = res.insertId;
@@ -62,11 +97,7 @@ async function getLeaderboard(role = 'dodger', difficulty = 'easy', limit = 10) 
   return rows;
 }
 
-// -----------------
 // Routes
-// -----------------
-
-// POST /api/start => create a player
 app.post('/api/start', async (req, res) => {
   try {
     const { name } = req.body;
@@ -79,7 +110,6 @@ app.post('/api/start', async (req, res) => {
   }
 });
 
-// GET /api/mechanics
 app.get('/api/mechanics', async (req, res) => {
   try {
     const rows = await getMechanics();
@@ -90,7 +120,6 @@ app.get('/api/mechanics', async (req, res) => {
   }
 });
 
-// GET /api/leaderboard
 app.get('/api/leaderboard', async (req, res) => {
   try {
     const role = req.query.role || 'dodger';
@@ -104,11 +133,6 @@ app.get('/api/leaderboard', async (req, res) => {
   }
 });
 
-/*
- POST /api/score
- body: { playerId, role, difficulty, score, result }
- result = 'win' | 'loss'
-*/
 app.post('/api/score', async (req, res) => {
   try {
     const { playerId, role = 'dodger', difficulty = 'easy', score = 0, result = null } = req.body;
@@ -139,15 +163,11 @@ app.post('/api/score', async (req, res) => {
   }
 });
 
-// -----------------
 // Fallback -> frontend
-// -----------------
 app.get('*', (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
 
-// -----------------
 // Start server
-// -----------------
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`🚀 Server running at http://localhost:${PORT}`));
