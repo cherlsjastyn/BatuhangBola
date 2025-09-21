@@ -2,24 +2,49 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
   <title>BATUHANG BOLA</title>
 
-  <link href="https://fonts.googleapis.com/css2?family=Rock+Salt&family=Pacifico&family=Raleway:wght@300;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Pacifico&family=Raleway:wght@300;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/style.css" />
 </head>
 <body>
   <canvas id="gameCanvas"></canvas>
 
-  <!-- Menu Section -->
   <div id="menu" class="menu">
     <h1>BATUHANG BOLA</h1>
 
-    <label for="playerName" style="display:block;color:#fff;margin-bottom:8px">Your name</label>
-    <input id="playerName" placeholder="Enter your name" style="padding:10px;border-radius:6px;border:none;margin-bottom:12px" />
+    <label style="color:#fff">Your name</label>
+    <input id="playerName" placeholder="Enter your name" />
 
-    <div style="margin-bottom:12px">
-      <label style="color:#fff;margin-right:8px">Difficulty</label>
+    <div class="section">
+      <label style="color:#fff">Mode</label>
+      <div>
+        <button id="btnModeThrower" class="modeBtn">Thrower</button>
+        <button id="btnModeDodger" class="modeBtn">Dodger</button>
+      </div>
+    </div>
+
+    <div id="throwerOptions" class="section hidden">
+      <label style="color:#fff">How many human throwers?</label>
+      <select id="selectThrowerCount">
+        <option value="1">1 human (+1 AI teammate)</option>
+        <option value="2">2 humans (no AI teammate)</option>
+      </select>
+    </div>
+
+    <div id="dodgerOptions" class="section hidden">
+      <label style="color:#fff">How many human dodgers?</label>
+      <select id="selectDodgerCount">
+        <option value="1">1</option>
+        <option value="2">2</option>
+        <option value="3">3</option>
+        <option value="4">4</option>
+      </select>
+    </div>
+
+    <div class="section">
+      <label style="color:#fff">Difficulty</label>
       <select id="selectDifficulty">
         <option value="easy">easy</option>
         <option value="medium">medium</option>
@@ -27,39 +52,33 @@
       </select>
     </div>
 
-    <button id="attackerBtn">Choose as Attacker</button>
-    <button id="dodgerBtn">Choose as Dodger</button>
+    <div style="margin-top:12px">
+      <button id="btnStart" class="big">Start Game</button>
+    </div>
 
-    <div style="margin-top:18px;">
-      <button id="btn-mechanics-minor" style="background:#333;padding:8px 12px">Mechanics</button>
-      <button id="btn-leaderboard-minor" style="background:#333;padding:8px 12px">Leaderboard</button>
+    <div style="margin-top:12px">
+      <button id="btnMechanics">Mechanics</button>
+      <button id="btnLeaderboard">Leaderboard</button>
     </div>
   </div>
 
-  <!-- Loading Screen -->
-  <div id="loadingScreen">
-    <div>
-      <img src="attackers.jpg" alt="Loading...">
-      <div style="margin-top:8px;color:#fff">Loading... Please wait.</div>
-      <div class="loading-tips">Tip: Dodge the balls to stay alive!</div>
-    </div>
+  <div id="hud" class="hud hidden">
+    <div id="scoreboard" class="scoreboard">Dodgers Remaining: 0</div>
+    <div id="turnLabel" class="turnLabel">Turn: —</div>
+    <div id="controlsLegend" class="controlsLegend"></div>
+    <button id="btnExit" class="small">Exit to Menu</button>
   </div>
 
-  <div class="scoreboard" id="scoreboard">Dodgers Remaining: 0</div>
-  <div class="game-over" id="gameOver">Game Over! All Dodgers Were Hit!</div>
-
-  <!-- Mechanics modal -->
   <div id="mechanicsModal" class="modal hidden">
-    <h3 style="color:#222">Mechanics</h3>
-    <div id="mechanicsContent" style="color:#222"></div>
-    <button id="closeMechanics" style="margin-top:8px">Close</button>
+    <h3>Mechanics</h3>
+    <div id="mechanicsContent"></div>
+    <button id="closeMechanics">Close</button>
   </div>
 
-  <!-- Leaderboard modal -->
   <div id="leaderboardModal" class="modal hidden">
-    <h3 style="color:#222">Leaderboard</h3>
-    <div id="leaderboardContent" style="color:#222"></div>
-    <button id="closeLeaderboard" style="margin-top:8px">Close</button>
+    <h3>Leaderboard</h3>
+    <div id="leaderboardContent"></div>
+    <button id="closeLeaderboard">Close</button>
   </div>
 
   <script src="/game.js"></script>
