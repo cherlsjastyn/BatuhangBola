@@ -1,0 +1,130 @@
+html, body {
+  margin: 0;
+  padding: 0;
+  overflow: hidden;
+  font-family: 'Raleway', sans-serif;
+  background: #f7b36d;
+  height: 100%;
+}
+
+canvas {
+  display: block;
+  background: #7cc576;
+  width: 100vw;
+  height: 100vh;
+}
+
+/* menu */
+.menu {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: rgb(152, 209, 77);
+  font-size: 36px;
+  font-weight: bold;
+  background-image: linear-gradient(135deg, rgba(0,0,0,0.1), rgba(255,255,255,0.06));
+  padding: 30px;
+  border-radius: 10px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+  z-index: 15;
+  min-width: 420px;
+}
+
+.menu h1 {
+  margin-bottom: 20px;
+  font-family: 'Pacifico', cursive;
+  font-size: 56px;
+  color: #ddda42;
+  text-shadow: 4px 4px 10px rgba(0, 0, 0, 0.7);
+}
+
+.menu button {
+  background-color: #4682b4;
+  color: white;
+  border: none;
+  padding: 12px 20px;
+  font-size: 18px;
+  margin: 8px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  border-radius: 6px;
+}
+
+.menu button#dodgerBtn { background:#28a745 }
+.menu button#attackerBtn { background:#007bff }
+
+.menu input, .menu select {
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: none;
+  margin-bottom: 8px;
+}
+
+#loadingScreen {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background-color: rgba(0, 0, 0, 0.8);
+  display: none;
+  justify-content: center;
+  align-items: center;
+  text-align: center;
+  color: white;
+  font-size: 24px;
+  z-index: 20;
+}
+
+#loadingScreen img {
+  width: 480px;
+  max-width: 80vw;
+  height: auto;
+  object-fit: cover;
+  border-radius: 8px;
+}
+
+.loading-tips {
+  font-size: 16px;
+  color: #fff;
+  margin-top: 10px;
+}
+
+/* overlay UI */
+.scoreboard, .game-over {
+  position: absolute;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 10;
+  text-align: center;
+  font-weight: bold;
+  color: white;
+  text-shadow: 1px 1px 4px #000;
+}
+
+.scoreboard {
+  top: 20px;
+  font-size: 20px;
+}
+
+.game-over {
+  top: 45%;
+  font-size: 36px;
+  display: none;
+}
+
+.modal {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  z-index: 30;
+  background: #fff;
+  padding: 18px;
+  border-radius: 8px;
+  box-shadow: 0 6px 20px rgba(0,0,0,0.2);
+  min-width: 320px;
+}
+.hidden { display:none }
