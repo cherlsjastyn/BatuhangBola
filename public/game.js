@@ -413,12 +413,13 @@
     scoreboardEl.innerText = `Dodgers Remaining: ${alive}    Score: ${playerScore}`;
   }
 
-  // --- End game handler ---
-async function endGame(){
+// --- End game handler ---
+async function endGame() {
   gameRunning = false;
+
   setTimeout(() => {
     (async () => {
-      alert(`Game over! Your score: ${playerScore}`);
+      // Save score
       try {
         if (localPlayer && localPlayer.id) {
           await fetch('/api/score', {
@@ -435,8 +436,24 @@ async function endGame(){
       } catch (e) {
         console.warn('score submit failed', e);
       }
-      hud.classList.add('hidden');
-      menu.classList.remove('hidden');
+
+      // Show modal
+      document.getElementById("finalScoreText").textContent = `Your score: ${playerScore}`;
+      document.getElementById("gameOverModal").classList.remove("hidden");
+
+      // Button listeners
+      document.getElementById("restartBtn").onclick = () => {
+        document.getElementById("gameOverModal").classList.add("hidden");
+        hud.classList.remove('hidden');
+        menu.classList.add('hidden');
+        startGame();
+      };
+
+      document.getElementById("menuBtn").onclick = () => {
+        document.getElementById("gameOverModal").classList.add("hidden");
+        hud.classList.add('hidden');
+        menu.classList.remove('hidden');
+      };
     })();
   }, 200);
 }
