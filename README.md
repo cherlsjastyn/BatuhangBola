@@ -1,2 +1,2 @@
 # BatuhangBola
-traditional filipino dodgeball
+Traditional Filipino Dodgeball
