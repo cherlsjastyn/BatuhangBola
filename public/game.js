@@ -266,34 +266,46 @@ btnLeaderboard.addEventListener('click', async () => {
     };
   }
 
-  function createHumanDodger(name, controlSet, color, startX) {
-    return {
-      id: `human-dod-${Math.random().toString(36).slice(2,6)}`,
-      name,
-      x: startX,
-      y: H * 0.5,
-      isHuman: true,
-      control: controlSet,
-      color,
-      alive: true,
-      speedMultiplier: 1,
-      lastReact: 0
-    };
-  }
+function createHumanDodger(name, controlSet, color, startX) {
+  // Calculate middle area between throwers
+  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+  const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
+  
+  return {
+    id: `human-dod-${Math.random().toString(36).slice(2,6)}`,
+    name,
+    x: startX,
+    y: middleY, // Start in the middle of the extended area
+    isHuman: true,
+    control: controlSet,
+    color,
+    alive: true,
+    speedMultiplier: 1,
+    lastReact: 0,
+    scoredOnThisBall: false
+  };
+}
 
-  function createAIDodger(name, color, startX) {
-    return {
-      id: `ai-dod-${Math.random().toString(36).slice(2,6)}`,
-      name,
-      x: startX,
-      y: H * 0.5,
-      isHuman: false,
-      color,
-      alive: true,
-      speedMultiplier: 1,
-      lastReact: 0
-    };
-  }
+function createAIDodger(name, color, startX) {
+  // Calculate middle area between throwers
+  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+  const middleY = topThrowerY + (bottomThrowerY - topThrowerY) / 2;
+  
+  return {
+    id: `ai-dod-${Math.random().toString(36).slice(2,6)}`,
+    name,
+    x: startX,
+    y: middleY, // Start in the middle of the extended area
+    isHuman: false,
+    color,
+    alive: true,
+    speedMultiplier: 1,
+    lastReact: 0,
+    scoredOnThisBall: false
+  };
+}
 
   // --- Drawing Functions ---
   function drawHuman(p, isThrower = false) {
@@ -372,23 +384,37 @@ btnLeaderboard.addEventListener('click', async () => {
     ctx.restore();
   }
 
-  function drawCourt() {
-    // Court markings
-    ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-    ctx.lineWidth = 3;
-    ctx.beginPath();
-    ctx.moveTo(0, H/2);
-    ctx.lineTo(W, H/2);
-    ctx.stroke();
-    
-    ctx.beginPath();
-    ctx.arc(W/2, H/2, H*0.09, 0, Math.PI*2);
-    ctx.stroke();
-    
-    ctx.fillStyle = 'rgba(255,255,255,0.04)';
-    ctx.fillRect(0, H*0.4, W, H*0.2);
-  }
-
+function drawCourt() {
+  // Court markings
+  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
+  ctx.lineWidth = 3;
+  ctx.beginPath();
+  ctx.moveTo(0, H/2);
+  ctx.lineTo(W, H/2);
+  ctx.stroke();
+  
+  ctx.beginPath();
+  ctx.arc(W/2, H/2, H*0.09, 0, Math.PI*2);
+  ctx.stroke();
+  
+  // Extended dodger area (subtle background)
+  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+  
+  ctx.fillStyle = 'rgba(255,255,255,0.06)';
+  ctx.fillRect(0, topThrowerY + 30, W, bottomThrowerY - topThrowerY - 60);
+  
+  // Boundary lines for extended area
+  ctx.strokeStyle = 'rgba(255,255,255,0.2)';
+  ctx.setLineDash([5, 5]);
+  ctx.beginPath();
+  ctx.moveTo(0, topThrowerY + 40);
+  ctx.lineTo(W, topThrowerY + 40);
+  ctx.moveTo(0, bottomThrowerY - 40);
+  ctx.lineTo(W, bottomThrowerY - 40);
+  ctx.stroke();
+  ctx.setLineDash([]);
+}
   function drawThrowGuide() {
     if (!throwGuide.visible) return;
     
@@ -540,61 +566,88 @@ btnLeaderboard.addEventListener('click', async () => {
     return true;
   }
 
-  function updateBall(dt) {
-    if (!activeBall) return;
+function updateBall(dt) {
+  if (!activeBall) return;
+  
+  const speed = activeBall.speed * (dt / 1000);
+  activeBall.x += activeBall.dirX * speed;
+  activeBall.y += activeBall.dirY * speed;
+  
+  // Check collisions with dodgers
+  for (let i = 0; i < dodgers.length; i++) {
+    const d = dodgers[i];
+    if (!d.alive) continue;
     
-    const speed = activeBall.speed * (dt / 1000);
-    activeBall.x += activeBall.dirX * speed;
-    activeBall.y += activeBall.dirY * speed;
+    const dx = activeBall.x - d.x;
+    const dy = activeBall.y - d.y;
+    const dist = Math.sqrt(dx * dx + dy * dy);
     
-    // Check collisions with dodgers
-    for (let i = 0; i < dodgers.length; i++) {
-      const d = dodgers[i];
-      if (!d.alive) continue;
-      
-      const dx = activeBall.x - d.x;
-      const dy = activeBall.y - d.y;
-      const dist = Math.sqrt(dx * dx + dy * dy);
-      
-      if (dist < 26) {
-        // Hit
-        d.alive = false;
-        resolveBall({ hitIndex: i, hit: true });
-        return;
-      }
-    }
-    
-    // Check if ball is out of bounds
-    if (activeBall.x < -40 || activeBall.x > W + 40 || 
-        activeBall.y < -40 || activeBall.y > H + 40) {
-      resolveBall({ hit: false });
+    if (dist < 26) {
+      // Hit
+      d.alive = false;
+      resolveBall({ hitIndex: i, hit: true });
+      return;
     }
   }
+  
+  // NEW: Check if ball passed dodgers (for scoring)
+  if (mode === 'dodger') {
+    const ballOwner = throwers[activeBall.ownerIndex];
+    if (ballOwner && !ballOwner.isHuman) { // Only AI throwers
+      dodgers.forEach((dodger, index) => {
+        if (dodger.alive && !dodger.scoredOnThisBall) {
+          // Check if ball has passed the dodger
+          const isBallPastDodger = 
+            (ballOwner.isTop && activeBall.y > dodger.y) || 
+            (!ballOwner.isTop && activeBall.y < dodger.y);
+          
+          if (isBallPastDodger) {
+            // Dodger successfully avoided the ball
+            if (dodger.isHuman) {
+              playerScore += 1; // Human dodger scores
+            }
+            dodger.scoredOnThisBall = true; // Prevent multiple scores
+            updateScoreboard();
+          }
+        }
+      });
+    }
+  }
+  
+  // Check if ball is out of bounds
+  if (activeBall.x < -40 || activeBall.x > W + 40 || 
+      activeBall.y < -40 || activeBall.y > H + 40) {
+    resolveBall({ hit: false });
+  }
+}
 
-  function resolveBall({ hit, hitIndex }) {
-    const owner = throwers[activeBall.ownerIndex];
-    if (hit && owner && owner.isHuman) {
-      playerScore += 1;
-    }
-    
-    activeBall = null;
-    ballInFlight = false;
-    
-    // Rotate turn
-    currentThrowerIndex = (currentThrowerIndex + 1) % throwers.length;
-    updateTurnLabel();
-    updateScoreboard();
-    
-    // If next thrower is AI, schedule their throw
-    const next = throwers[currentThrowerIndex];
-    if (next && !next.isHuman) {
-      setTimeout(() => aiThrow(next, currentThrowerIndex), 600 + Math.random() * 700);
-    }
-    
-    // Check game over
-    const anyAlive = dodgers.some(d => d.alive);
-    if (!anyAlive) endGame();
+function resolveBall({ hit, hitIndex }) {
+  const owner = throwers[activeBall.ownerIndex];
+  if (hit && owner && owner.isHuman) {
+    playerScore += 1;
   }
+  
+  // NEW: Reset scored flags for next ball
+  dodgers.forEach(d => d.scoredOnThisBall = false);
+  
+  activeBall = null;
+  ballInFlight = false;
+  
+  // Rotate turn
+  currentThrowerIndex = (currentThrowerIndex + 1) % throwers.length;
+  updateTurnLabel();
+  updateScoreboard();
+  
+  // If next thrower is AI, schedule their throw
+  const next = throwers[currentThrowerIndex];
+  if (next && !next.isHuman) {
+    setTimeout(() => aiThrow(next, currentThrowerIndex), 600 + Math.random() * 700);
+  }
+  
+  // Check game over
+  const anyAlive = dodgers.some(d => d.alive);
+  if (!anyAlive) endGame();
+}
 
   function aiThrow(aiObj, idx) {
     if (ballInFlight || idx !== currentThrowerIndex) return;
@@ -627,44 +680,66 @@ btnLeaderboard.addEventListener('click', async () => {
     ballInFlight = true;
   }
 
-  function updateAIDodgers(dt) {
-    const aliveBall = activeBall;
-    const params = DIFF[difficulty];
+function updateAIDodgers(dt) {
+  const aliveBall = activeBall;
+  const params = DIFF[difficulty];
+  
+  // Get thrower positions for movement boundaries
+  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+  
+  dodgers.forEach(d => {
+    if (d.isHuman || !d.alive) return;
     
-    dodgers.forEach(d => {
-      if (d.isHuman || !d.alive) return;
+    if (!aliveBall) {
+      // Idle wandering - within extended bounds
+      d.x += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
+      d.x = Math.max(30, Math.min(W - 30, d.x));
       
-      if (!aliveBall) {
-        // Idle wandering
-        d.x += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
-        d.x = Math.max(30, Math.min(W - 30, d.x));
+      // Also wander vertically within extended bounds
+      d.y += (Math.random() - 0.5) * 10 * (dt / 1000) * params.speed;
+      d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+    } else {
+      // React to ball
+      const now = Date.now();
+      if (now - (d.lastReact || 0) < d.reactMs) return;
+      
+      d.lastReact = now;
+      
+      if (Math.random() > d.successProb) {
+        // Failed reaction - move randomly within extended bounds
+        if (Math.random() > 0.6) {
+          d.x += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
+          d.x = Math.max(30, Math.min(W - 30, d.x));
+        }
+        if (Math.random() > 0.6) {
+          d.y += (Math.random() > 0.5 ? -1 : 1) * 20 * params.speed;
+          d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+        }
       } else {
-        // React to ball
-        const now = Date.now();
-        if (now - (d.lastReact || 0) < d.reactMs) return;
-        
-        d.lastReact = now;
-        
-        if (Math.random() > d.successProb) {
-          // Failed reaction
-          if (Math.random() > 0.6) {
-            d.x += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
-          }
+        // Successful dodge - strategic movement within extended bounds
+        if (Math.abs(aliveBall.x - d.x) < 120) {
+          const leftSpace = d.x - 30;
+          const rightSpace = (W - 30) - d.x;
+          const dir = rightSpace > leftSpace ? 1 : -1;
+          d.x += dir * (80 * params.speed);
+          d.x = Math.max(30, Math.min(W - 30, d.x));
         } else {
-          // Successful dodge
-          if (Math.abs(aliveBall.x - d.x) < 120) {
-            const leftSpace = d.x - 30;
-            const rightSpace = (W - 30) - d.x;
-            const dir = rightSpace > leftSpace ? 1 : -1;
-            d.x += dir * (80 * params.speed);
-            d.x = Math.max(30, Math.min(W - 30, d.x));
-          } else {
-            d.x += (W/2 - d.x) * 0.02 * params.speed;
-          }
+          d.x += (W/2 - d.x) * 0.02 * params.speed;
+        }
+        
+        // Also move vertically to avoid balls
+        if (Math.abs(aliveBall.y - d.y) < 80) {
+          const topSpace = d.y - (topThrowerY + 40);
+          const bottomSpace = (bottomThrowerY - 40) - d.y;
+          const dir = bottomSpace > topSpace ? 1 : -1;
+          d.y += dir * (60 * params.speed);
+          d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
         }
       }
-    });
-  }
+    }
+  });
+}
 
   // Add this new function to update AI throwers
   function updateAIThrowers(dt) {
@@ -693,74 +768,80 @@ btnLeaderboard.addEventListener('click', async () => {
     });
   }
 
-  function updateHumans(dt) {
-    const speedBase = 300 * (dt / 1000);
+function updateHumans(dt) {
+  const speedBase = 300 * (dt / 1000);
+  
+  // Update human throwers
+  throwers.forEach((t, idx) => {
+    if (!t.isHuman || !t.alive) return;
     
-    // Update human throwers
-    throwers.forEach((t, idx) => {
-      if (!t.isHuman || !t.alive) return;
-      
-      const set = t.control;
-      
-      // Horizontal movement only (left/right)
-      if (keyState[set.left]) t.x -= speedBase * t.speedMultiplier;
-      if (keyState[set.right]) t.x += speedBase * t.speedMultiplier;
-      
-      // Constrain movement based on position
-      t.x = Math.max(30, Math.min(W - 30, t.x));
-      
-      // Aim adjustment (up/down)
-      const aimSpeed = 0.05;
-      if (keyState[set.aimUp]) {
-        if (t.isTop) {
-          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
-        } else {
-          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
-        }
-      }
-      if (keyState[set.aimDown]) {
-        if (t.isTop) {
-          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
-        } else {
-          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
-        }
-      }
-      
-      // Handle throw key
-      if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
-        if (!keyState._throwHandled) {
-          startThrowGuide(t);
-          keyState._throwHandled = true;
-        }
-      } else if (keyState._throwHandled) {
-        // Throw when key is released
-        executeThrow();
-        keyState._throwHandled = false;
-      }
-      
-      // Update throw guide if visible
-      if (throwGuide.visible && idx === currentThrowerIndex) {
-        updateThrowGuideFromAim(t);
-      }
-    });
+    const set = t.control;
     
-    // Update human dodgers
-    dodgers.forEach((d, idx) => {
-      if (!d.isHuman || !d.alive) return;
-      
-      const set = d.control;
-      if (!set) return;
-      
-      const sp = speedBase * 1.0;
-      if (keyState[set.left]) d.x -= sp;
-      if (keyState[set.right]) d.x += sp;
-      if (keyState[set.up]) d.y -= sp;
-      if (keyState[set.down]) d.y += sp;
-      
-      d.x = Math.max(30, Math.min(W - 30, d.x));
-      d.y = Math.max(H * 0.4, Math.min(H * 0.6, d.y));
-    });
-  }
+    // Horizontal movement only (left/right)
+    if (keyState[set.left]) t.x -= speedBase * t.speedMultiplier;
+    if (keyState[set.right]) t.x += speedBase * t.speedMultiplier;
+    
+    // Constrain movement based on position
+    t.x = Math.max(30, Math.min(W - 30, t.x));
+    
+    // Aim adjustment (up/down)
+    const aimSpeed = 0.05;
+    if (keyState[set.aimUp]) {
+      if (t.isTop) {
+        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
+      } else {
+        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
+      }
+    }
+    if (keyState[set.aimDown]) {
+      if (t.isTop) {
+        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
+      } else {
+        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
+      }
+    }
+    
+    // Handle throw key
+    if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
+      if (!keyState._throwHandled) {
+        startThrowGuide(t);
+        keyState._throwHandled = true;
+      }
+    } else if (keyState._throwHandled) {
+      // Throw when key is released
+      executeThrow();
+      keyState._throwHandled = false;
+    }
+    
+    // Update throw guide if visible
+    if (throwGuide.visible && idx === currentThrowerIndex) {
+      updateThrowGuideFromAim(t);
+    }
+  });
+  
+  // Update human dodgers - EXTENDED MOVEMENT AREA
+  dodgers.forEach((d, idx) => {
+    if (!d.isHuman || !d.alive) return;
+    
+    const set = d.control;
+    if (!set) return;
+    
+    const sp = speedBase * 1.0;
+    if (keyState[set.left]) d.x -= sp;
+    if (keyState[set.right]) d.x += sp;
+    if (keyState[set.up]) d.y -= sp;
+    if (keyState[set.down]) d.y += sp;
+    
+    // EXTENDED: Allow movement across the full width of the court
+    d.x = Math.max(30, Math.min(W - 30, d.x));
+    
+    // EXTENDED: Allow vertical movement from just above bottom thrower to just below top thrower
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    
+    d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+  });
+}
 
   function updateScoreboard() {
     const alive = dodgers.filter(d => d.alive).length;

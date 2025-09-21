@@ -232,3 +232,33 @@ canvas {
     margin: 10px;
   }
 }
+/* Apply background only to menus */
+#nameEntryPage, 
+#mainMenuPage, 
+#gameOptionsPage {
+  background: url("back.jpg") no-repeat center center;
+  background-size: cover;
+}
+
+/* Keep other pages using the normal color */
+body {
+  background: var(--bg);
+}
+/* Make labels bold & more readable */
+.menu label {
+  font-weight: 700;
+  font-size: 18px;
+  color: #fff;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.6);
+  display: block;
+  margin-bottom: 6px;
+}
+/* Error message under input */
+.error {
+  color: #ff2222;         /* brighter red */
+  font-weight: 800;       /* extra bold */
+  margin-top: 6px;
+  font-size: 16px;        /* slightly bigger */
+  text-align: center;
+  text-shadow: 1px 1px 4px rgba(0,0,0,0.7); /* makes it glow & readable */
+}
