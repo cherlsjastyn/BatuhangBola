@@ -1,0 +1,48 @@
+DATABASE:
+-- Create the database
+CREATE DATABASE IF NOT EXISTS batuhang_bola;
+USE batuhang_bola;
+-- 1️⃣ Players table
+CREATE TABLE IF NOT EXISTS players (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    name VARCHAR(50) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 2️⃣ Scores table
+CREATE TABLE IF NOT EXISTS scores (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    player_id INT NOT NULL,
+    role ENUM('thrower', 'dodger') NOT NULL,
+    difficulty ENUM('easy', 'medium', 'hard') NOT NULL,
+    score INT NOT NULL DEFAULT 0,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (player_id) REFERENCES players(id) ON DELETE CASCADE
+);
+
+-- 3️⃣ Mechanics table
+CREATE TABLE IF NOT EXISTS mechanics (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    title VARCHAR(100) NOT NULL,
+    content TEXT NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- 4️⃣ Leaderboard view
+CREATE OR REPLACE VIEW leaderboard AS
+SELECT 
+    p.id AS player_id,
+    p.name,
+    s.difficulty,
+    SUM(s.score) AS total_score,
+    COUNT(s.id) AS games_played
+FROM players p
+JOIN scores s ON p.id = s.player_id
+GROUP BY p.id, s.difficulty
+ORDER BY total_score DESC;
+
+-- 5️⃣ Example mechanics entries
+INSERT INTO mechanics (title, content) VALUES
+('How to Play', 'Players throw a ball at dodgers. Score by hitting dodgers.'),
+('Game Modes', 'Thrower Mode: Human throws. Dodger Mode: Human dodges.'),
+('Controls', 'Thrower1: WASD + Space, Thrower2: Arrows + Numpad5. Dodgers: D1 WASD, D2 IJKL, D3 Arrows, D4 Numpad 8/5/4/6.');
