@@ -121,18 +121,56 @@
   });
 
   // Leaderboard button
-  btnLeaderboard.addEventListener('click', async () => {
-    try {
-      const r = await fetch(`/api/leaderboard?role=dodger&difficulty=${selectDifficulty.value}&limit=10`);
-      const rows = await r.json();
-      leaderboardContent.innerHTML = rows.length ? 
-        rows.map(x => `<div>${x.name} — ${x.total_score} (${x.games_played})</div>`).join('') : 
-        '<div>No records</div>';
-      leaderboardModal.classList.remove('hidden');
-    } catch (e) {
-      alert('Leaderboard load error');
+btnLeaderboard.addEventListener('click', async () => {
+  try {
+    const role = 'dodger'; // or make this dynamic based on game mode
+    const difficulty = selectDifficulty.value || 'easy';
+    const limit = 10;
+    
+    const response = await fetch(`/api/leaderboard?role=${role}&difficulty=${difficulty}&limit=${limit}`);
+    
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}: ${response.statusText}`);
     }
-  });
+    
+    const rows = await response.json();
+    
+    if (rows.length === 0) {
+      leaderboardContent.innerHTML = '<div class="no-records">No records found. Play some games first!</div>';
+    } else {
+      leaderboardContent.innerHTML = `
+        <table class="leaderboard-table">
+          <thead>
+            <tr>
+              <th>Rank</th>
+              <th>Name</th>
+              <th>Score</th>
+              <th>Games</th>
+              <th>Wins</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows.map((player, index) => `
+              <tr>
+                <td>${index + 1}</td>
+                <td>${player.name}</td>
+                <td>${player.total_score}</td>
+                <td>${player.games_played}</td>
+                <td>${player.wins}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+    
+    leaderboardModal.classList.remove('hidden');
+  } catch (e) {
+    console.error('Leaderboard load error:', e);
+    leaderboardContent.innerHTML = `<div class="error">Error loading leaderboard: ${e.message}</div>`;
+    leaderboardModal.classList.remove('hidden');
+  }
+});
 
   // --- Game State & Entities ---
   let mode = null;
@@ -719,36 +757,43 @@
     scoreboardEl.innerText = `Dodgers Remaining: ${alive} Score: ${playerScore}`;
   }
 
-  async function endGame() {
-    gameRunning = false;
-    
-    try {
-      if (localPlayer && localPlayer.id) {
-        // Determine if player won or lost
-        const isThrower = mode === 'thrower';
-        const dodgersAlive = dodgers.filter(d => d.alive).length;
-        const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
-        
-        await fetch('/api/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerId: localPlayer.id,
-            role: mode,
-            difficulty,
-            score: playerScore,
-            result: playerWon ? 'win' : 'loss'
-          })
-        });
+async function endGame() {
+  gameRunning = false;
+  
+  try {
+    if (localPlayer && localPlayer.id) {
+      // Determine if player won or lost
+      const isThrower = mode === 'thrower';
+      const dodgersAlive = dodgers.filter(d => d.alive).length;
+      const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
+      
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: localPlayer.id,
+          role: mode,
+          difficulty,
+          score: playerScore,
+          result: playerWon ? 'win' : 'loss'
+        })
+      });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        console.warn('Score submission failed:', result.error);
+      } else {
+        console.log('Score submitted successfully:', result.message);
       }
-    } catch (e) {
-      console.warn('Score submission failed', e);
     }
-    
-    // Show game over modal
-    finalScoreText.textContent = `Your score: ${playerScore}`;
-    gameOverModal.classList.remove("hidden");
+  } catch (e) {
+    console.warn('Score submission failed', e);
   }
+  
+  // Show game over modal
+  finalScoreText.textContent = `Your score: ${playerScore}`;
+  gameOverModal.classList.remove("hidden");
+}
 
   // --- Game Loop ---
   let lastTime = performance.now();
