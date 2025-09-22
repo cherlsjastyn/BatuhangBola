@@ -497,6 +497,7 @@ btnLeaderboard.addEventListener('click', async () => {
     };
   }
 
+
   // --- Drawing Functions ---
   function drawHuman(p, isThrower = false) {
     const x = p.x, y = p.y;
@@ -1006,66 +1007,74 @@ btnLeaderboard.addEventListener('click', async () => {
     }
   }
 
-  function updateAIDodgers(dt) {
-    const aliveBall = activeBall;
-    const params = DIFF[difficulty];
+function updateAIDodgers(dt) {
+  const aliveBall = activeBall;
+  const params = DIFF[difficulty];
+  
+  // Get thrower positions for movement boundaries
+  const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+  const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+  
+  dodgers.forEach(d => {
+    if (d.isHuman || !d.alive || d.frozen) return;
     
-    // Get thrower positions for movement boundaries
-    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    let newX = d.x;
+    let newY = d.y;
     
-    dodgers.forEach(d => {
-      if (d.isHuman || !d.alive || d.frozen) return;
+    if (!aliveBall) {
+      // Idle wandering - within extended bounds
+      newX += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
       
-      if (!aliveBall) {
-        // Idle wandering - within extended bounds
-        d.x += (Math.random() - 0.5) * 20 * (dt / 1000) * params.speed;
-        d.x = Math.max(30, Math.min(W - 30, d.x));
-        
-        // Also wander vertically within extended bounds
-        d.y += (Math.random() - 0.5) * 10 * (dt / 1000) * params.speed;
-        d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+      // Also wander vertically within extended bounds
+      newY += (Math.random() - 0.5) * 10 * (dt / 1000) * params.speed;
+    } else {
+      // React to ball
+      const now = Date.now();
+      if (now - (d.lastReact || 0) < d.reactMs) return;
+      
+      d.lastReact = now;
+      
+      if (Math.random() > d.successProb) {
+        // Failed reaction - move randomly within extended bounds
+        if (Math.random() > 0.6) {
+          newX += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
+        }
+        if (Math.random() > 0.6) {
+          newY += (Math.random() > 0.5 ? -1 : 1) * 20 * params.speed;
+        }
       } else {
-        // React to ball
-        const now = Date.now();
-        if (now - (d.lastReact || 0) < d.reactMs) return;
-        
-        d.lastReact = now;
-        
-        if (Math.random() > d.successProb) {
-          // Failed reaction - move randomly within extended bounds
-          if (Math.random() > 0.6) {
-            d.x += (Math.random() > 0.5 ? -1 : 1) * 30 * params.speed;
-            d.x = Math.max(30, Math.min(W - 30, d.x));
-          }
-          if (Math.random() > 0.6) {
-            d.y += (Math.random() > 0.5 ? -1 : 1) * 20 * params.speed;
-            d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-          }
+        // Successful dodge - strategic movement within extended bounds
+        if (Math.abs(aliveBall.x - d.x) < 120) {
+          const leftSpace = d.x - 30;
+          const rightSpace = (W - 30) - d.x;
+          const dir = rightSpace > leftSpace ? 1 : -1;
+          newX += dir * (80 * params.speed);
         } else {
-          // Successful dodge - strategic movement within extended bounds
-          if (Math.abs(aliveBall.x - d.x) < 120) {
-            const leftSpace = d.x - 30;
-            const rightSpace = (W - 30) - d.x;
-            const dir = rightSpace > leftSpace ? 1 : -1;
-            d.x += dir * (80 * params.speed);
-            d.x = Math.max(30, Math.min(W - 30, d.x));
-          } else {
-            d.x += (W/2 - d.x) * 0.02 * params.speed;
-          }
-          
-          // Also move vertically to avoid balls
-          if (Math.abs(aliveBall.y - d.y) < 80) {
-            const topSpace = d.y - (topThrowerY + 40);
-            const bottomSpace = (bottomThrowerY - 40) - d.y;
-            const dir = bottomSpace > topSpace ? 1 : -1;
-            d.y += dir * (60 * params.speed);
-            d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-          }
+          newX += (W/2 - d.x) * 0.02 * params.speed;
+        }
+        
+        // Also move vertically to avoid balls
+        if (Math.abs(aliveBall.y - d.y) < 80) {
+          const topSpace = d.y - (topThrowerY + 40);
+          const bottomSpace = (bottomThrowerY - 40) - d.y;
+          const dir = bottomSpace > topSpace ? 1 : -1;
+          newY += dir * (60 * params.speed);
         }
       }
-    });
-  }
+    }
+    
+    // Check collision before updating position
+    if (!checkPlayerObstacleCollision(d, newX, newY)) {
+      d.x = newX;
+      d.y = newY;
+    }
+    
+    // Constrain movement
+    d.x = Math.max(30, Math.min(W - 30, d.x));
+    d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+  });
+}
+
 
   function updateAIThrowers(dt) {
     throwers.forEach((t, idx) => {
@@ -1093,108 +1102,131 @@ btnLeaderboard.addEventListener('click', async () => {
     });
   }
 
-  function updateHumans(dt) {
-    const speedBase = 300 * (dt / 1000);
+function updateHumans(dt) {
+  const speedBase = 300 * (dt / 1000);
+  
+  // Update human throwers
+  throwers.forEach((t, idx) => {
+    if (!t.isHuman || !t.alive || t.frozen) return;
     
-    // Update human throwers
-    throwers.forEach((t, idx) => {
-      if (!t.isHuman || !t.alive || t.frozen) return;
-      
-      const set = t.control;
-      
-      // Horizontal movement only (left/right)
-      if (keyState[set.left]) t.x -= speedBase * t.speedMultiplier;
-      if (keyState[set.right]) t.x += speedBase * t.speedMultiplier;
-      
-      // Constrain movement based on position
-      t.x = Math.max(30, Math.min(W - 30, t.x));
-      
-      // Aim adjustment (up/down)
-      const aimSpeed = 0.05;
-      if (keyState[set.aimUp]) {
-        if (t.isTop) {
-          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
-        } else {
-          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
-        }
-      }
-      if (keyState[set.aimDown]) {
-        if (t.isTop) {
-          t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
-        } else {
-          t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
-        }
-      }
-      
-      // Handle throw key
-      if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
-        if (!keyState._throwHandled) {
-          startThrowGuide(t);
-          keyState._throwHandled = true;
-        }
-      } else if (keyState._throwHandled) {
-        // Throw when key is released
-        executeThrow();
-        keyState._throwHandled = false;
-      }
-      
-      // Update throw guide if visible
-      if (throwGuide.visible && idx === currentThrowerIndex) {
-        updateThrowGuideFromAim(t);
-      }
-      
-      // Handle abilities
-      if (t.abilities) {
-        t.abilities.forEach((ability, abilityIndex) => {
-          if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
-            if (ability.activate()) {
-              updateAbilityUI();
-            }
-            keyState[`ability_${ability.key}_handled`] = true;
-          } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
-            keyState[`ability_${ability.key}_handled`] = false;
-          }
-        });
-      }
-    });
+    const set = t.control;
+    let newX = t.x;
+    let newY = t.y;
     
-    // Update human dodgers - EXTENDED MOVEMENT AREA
-    dodgers.forEach((d, idx) => {
-      if (!d.isHuman || !d.alive || d.frozen) return;
-      
-      const set = d.control;
-      if (!set) return;
-      
-      const sp = speedBase * d.speedMultiplier;
-      if (keyState[set.left]) d.x -= sp;
-      if (keyState[set.right]) d.x += sp;
-      if (keyState[set.up]) d.y -= sp;
-      if (keyState[set.down]) d.y += sp;
-      
-      // EXTENDED: Allow movement across the full width of the court
-      d.x = Math.max(30, Math.min(W - 30, d.x));
-      
-      // EXTENDED: Allow vertical movement from just above bottom thrower to just below top thrower
-      const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
-      const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
-      
-      d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
-      
-      // Handle abilities
-      if (d.abilities) {
-        d.abilities.forEach((ability, abilityIndex) => {
-          if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
-            if (ability.activate()) {
-              updateAbilityUI();
-            }
-            keyState[`ability_${ability.key}_handled`] = true;
-          } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
-            keyState[`ability_${ability.key}_handled`] = false;
-          }
-        });
+    // Calculate potential new position
+    if (keyState[set.left]) newX -= speedBase * t.speedMultiplier;
+    if (keyState[set.right]) newX += speedBase * t.speedMultiplier;
+    
+    // Check collision before updating position
+    if (!checkPlayerObstacleCollision(t, newX, t.y)) {
+      t.x = newX;
+    }
+    
+    // Constrain movement based on position
+    t.x = Math.max(30, Math.min(W - 30, t.x));
+    
+    // Aim adjustment (up/down) - no collision check needed for aiming
+    const aimSpeed = 0.05;
+    if (keyState[set.aimUp]) {
+      if (t.isTop) {
+        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle - aimSpeed));
+      } else {
+        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle - aimSpeed));
       }
-    });
-  }
+    }
+    if (keyState[set.aimDown]) {
+      if (t.isTop) {
+        t.aimAngle = Math.max(Math.PI/4, Math.min(3*Math.PI/4, t.aimAngle + aimSpeed));
+      } else {
+        t.aimAngle = Math.max(-3*Math.PI/4, Math.min(-Math.PI/4, t.aimAngle + aimSpeed));
+      }
+    }
+    
+    // Handle throw key
+    if (keyState[set.throw] && idx === currentThrowerIndex && !ballInFlight) {
+      if (!keyState._throwHandled) {
+        startThrowGuide(t);
+        keyState._throwHandled = true;
+      }
+    } else if (keyState._throwHandled) {
+      // Throw when key is released
+      executeThrow();
+      keyState._throwHandled = false;
+    }
+    
+    // Update throw guide if visible
+    if (throwGuide.visible && idx === currentThrowerIndex) {
+      updateThrowGuideFromAim(t);
+    }
+    
+    // Handle abilities
+    if (t.abilities) {
+      t.abilities.forEach((ability, abilityIndex) => {
+        if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
+          if (ability.activate()) {
+            updateAbilityUI();
+          }
+          keyState[`ability_${ability.key}_handled`] = true;
+        } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
+          keyState[`ability_${ability.key}_handled`] = false;
+        }
+      });
+    }
+  });
+  
+  // Update human dodgers - EXTENDED MOVEMENT AREA
+  dodgers.forEach((d, idx) => {
+    if (!d.isHuman || !d.alive || d.frozen) return;
+    
+    const set = d.control;
+    if (!set) return;
+    
+    const sp = speedBase * d.speedMultiplier;
+    let newX = d.x;
+    let newY = d.y;
+    
+    // Calculate potential new position
+    if (keyState[set.left]) newX -= sp;
+    if (keyState[set.right]) newX += sp;
+    if (keyState[set.up]) newY -= sp;
+    if (keyState[set.down]) newY += sp;
+    
+    // Check collision before updating position (X movement)
+    if (!checkPlayerObstacleCollision(d, newX, d.y)) {
+      d.x = newX;
+    } else {
+      newX = d.x; // Reset X if collision detected
+    }
+    
+    // Check collision before updating position (Y movement)
+    if (!checkPlayerObstacleCollision(d, d.x, newY)) {
+      d.y = newY;
+    }
+    
+    // EXTENDED: Allow movement across the full width of the court
+    d.x = Math.max(30, Math.min(W - 30, d.x));
+    
+    // EXTENDED: Allow vertical movement from just above bottom thrower to just below top thrower
+    const topThrowerY = throwers.find(t => t.isTop)?.y || 60;
+    const bottomThrowerY = throwers.find(t => !t.isTop)?.y || H - 60;
+    
+    d.y = Math.max(topThrowerY + 40, Math.min(bottomThrowerY - 40, d.y));
+    
+    // Handle abilities
+    if (d.abilities) {
+      d.abilities.forEach((ability, abilityIndex) => {
+        if (keyState[ability.key] && !keyState[`ability_${ability.key}_handled`]) {
+          if (ability.activate()) {
+            updateAbilityUI();
+          }
+          keyState[`ability_${ability.key}_handled`] = true;
+        } else if (!keyState[ability.key] && keyState[`ability_${ability.key}_handled`]) {
+          keyState[`ability_${ability.key}_handled`] = false;
+        }
+      });
+    }
+  });
+}
 
   function updateScoreboard() {
     const alive = dodgers.filter(d => d.alive).length;
@@ -1350,4 +1382,24 @@ btnLeaderboard.addEventListener('click', async () => {
 
   // Start the game loop
   requestAnimationFrame(frame);
+
+  function checkPlayerObstacleCollision(player, newX, newY) {
+  const playerRadius = 20; // Approximate player collision radius
+  
+  for (const obstacle of obstacles) {
+    // Check if the player's new position would collide with an obstacle
+    const closestX = Math.max(obstacle.x, Math.min(newX, obstacle.x + obstacle.width));
+    const closestY = Math.max(obstacle.y, Math.min(newY, obstacle.y + obstacle.height));
+    
+    const distanceX = newX - closestX;
+    const distanceY = newY - closestY;
+    const distance = Math.sqrt(distanceX * distanceX + distanceY * distanceY);
+    
+    if (distance < playerRadius) {
+      return true; // Collision detected
+    }
+  }
+  
+  return false; // No collision
+}
 })();

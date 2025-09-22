@@ -18,11 +18,8 @@ const pool = mysql.createPool({
   database: process.env.DB_NAME || 'batuhang_bola',
   waitForConnections: true,
   connectionLimit: 10,
-  reconnect: true,
-  acquireTimeout: 60000,
-  timeout: 60000,
+  // Removed reconnect, acquireTimeout, timeout options
 });
-
 // Test DB connection at startup
 async function initializeDatabase() {
   try {

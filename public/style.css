@@ -441,7 +441,7 @@ button:disabled:hover::before {
 
 /* Mechanics and Leaderboard modals */
 #mechanicsModal, #leaderboardModal {
-  position: fixed;
+   position: fixed;
   top: 50%;
   left: 50%;
   transform: translate(-50%, -50%);
@@ -452,23 +452,42 @@ button:disabled:hover::before {
   max-width: 500px;
   width: 90%;
   max-height: 80vh;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column; /* ensures vertical layout */
   box-shadow: var(--shadow);
   color: white;
+  overflow-y: auto;
 }
-
 #mechanicsModal h3, #leaderboardModal h3 {
-  margin-top: 0;
+   margin: 0 0 20px;
   text-align: center;
   font-size: 28px;
-  margin-bottom: 20px;
   text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
 #mechanicsContent, #leaderboardContent {
-  margin: 20px 0;
+ flex: 1; /* makes content expand naturally */
+  margin-bottom: 20px;
   line-height: 1.6;
   font-size: 16px;
+  overflow-y: auto;
+}
+
+
+#closeMechanics {
+  margin-top: auto; /* pushes button to the bottom */
+  padding: 10px 20px;
+  background: linear-gradient(to bottom, var(--accent), #e6b413);
+  color: var(--dark);
+  border: none;
+  border-radius: 8px;
+  font-weight: bold;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+#closeMechanics:hover {
+  background: linear-gradient(to bottom, #f8d747, #dfab0c);
 }
 
 /* Leaderboard table styles */
