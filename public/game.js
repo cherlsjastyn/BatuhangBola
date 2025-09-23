@@ -179,7 +179,7 @@ btnLeaderboard.addEventListener('click', async () => {
             ${rows.map((player, index) => `
               <tr>
                 <td>${index + 1}</td>
-                <td>${player.name}</td>
+                <td>${player.player_name || player.name}</td> <!-- UPDATE THIS LINE -->
                 <td>${player.total_score}</td>
                 <td>${player.games_played}</td>
                 <td>${player.wins}</td>
@@ -1233,43 +1233,44 @@ function updateHumans(dt) {
     scoreboardEl.innerText = `Dodgers Remaining: ${alive} Score: ${playerScore}`;
   }
 
-  async function endGame() {
-    gameRunning = false;
-    
-    try {
-      if (localPlayer && localPlayer.id) {
-        // Determine if player won or lost
-        const isThrower = mode === 'thrower';
-        const dodgersAlive = dodgers.filter(d => d.alive).length;
-        const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
-        
-        const response = await fetch('/api/score', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            playerId: localPlayer.id,
-            role: mode,
-            difficulty,
-            score: playerScore,
-            result: playerWon ? 'win' : 'loss'
-          })
-        });
-        
-        const result = await response.json();
-        if (!response.ok) {
-          console.warn('Score submission failed:', result.error);
-        } else {
-          console.log('Score submitted successfully:', result.message);
-        }
+async function endGame() {
+  gameRunning = false;
+  
+  try {
+    if (localPlayer && localPlayer.id) {
+      // Determine if player won or lost
+      const isThrower = mode === 'thrower';
+      const dodgersAlive = dodgers.filter(d => d.alive).length;
+      const playerWon = (isThrower && dodgersAlive === 0) || (!isThrower && dodgersAlive > 0);
+      
+      const response = await fetch('/api/score', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playerId: localPlayer.id,
+          playerName: localPlayer.name, // ADD THIS LINE
+          role: mode,
+          difficulty,
+          score: playerScore,
+          result: playerWon ? 'win' : 'loss'
+        })
+      });
+      
+      const result = await response.json();
+      if (!response.ok) {
+        console.warn('Score submission failed:', result.error);
+      } else {
+        console.log('Score submitted successfully:', result.message);
       }
-    } catch (e) {
-      console.warn('Score submission failed', e);
     }
-    
-    // Show game over modal
-    finalScoreText.textContent = `Your score: ${playerScore}`;
-    gameOverModal.classList.remove("hidden");
+  } catch (e) {
+    console.warn('Score submission failed', e);
   }
+  
+  // Show game over modal
+  finalScoreText.textContent = `Your score: ${playerScore}`;
+  gameOverModal.classList.remove("hidden");
+}
 
   // --- Game Loop ---
   let lastTime = performance.now();
@@ -1402,4 +1403,336 @@ function updateHumans(dt) {
   
   return false; // No collision
 }
+// Socket.IO connection
+const socket = io();
+
+// Game state with Socket.IO integration
+const gameState = {
+    players: [],
+    balls: [],
+    scores: {},
+    gameStarted: false,
+    playerId: null,
+    playerName: '',
+    role: 'dodger',
+    difficulty: 'easy',
+    currentPage: 'nameEntryPage',
+    connectedPlayers: 0
+};
+
+// Initialize Socket.IO listeners
+function initializeSocketIO() {
+  socket.emit('scoreUpdate', {
+  playerId: localPlayer.id,
+  playerName: localPlayer.name, // ADD THIS
+  role: mode,
+  difficulty: difficulty,
+  score: playerScore,
+  result: playerWon ? 'win' : 'loss'
+});
+    // Connection status
+    socket.on('connect', () => {
+        console.log('Connected to server');
+        updateConnectionStatus(true);
+    });
+
+    socket.on('disconnect', () => {
+        console.log('Disconnected from server');
+        updateConnectionStatus(false);
+    });
+
+    // Player count updates
+    socket.on('playerCountUpdate', (count) => {
+        gameState.connectedPlayers = count;
+        console.log('Online players:', count);
+        // You can display this in your HUD if needed
+    });
+
+    // Leaderboard updates
+    socket.on('leaderboardUpdate', (leaderboardData) => {
+        console.log('Leaderboard updated:', leaderboardData);
+        // If leaderboard modal is open, refresh it
+        if (!document.getElementById('leaderboardModal').classList.contains('hidden')) {
+            showLeaderboard();
+        }
+    });
+
+    // High score notifications
+    socket.on('newHighScore', (highScoreData) => {
+        showHighScoreNotification(highScoreData);
+    });
+
+    // Game state synchronization
+    socket.on('gameStateSync', (gameData) => {
+        syncGameState(gameData);
+    });
+
+    // Score update responses
+    socket.on('scoreUpdateResponse', (response) => {
+        handleScoreUpdateResponse(response);
+    });
+}
+
+// Update connection status (you can add a small indicator to your HUD)
+function updateConnectionStatus(connected) {
+    const status = connected ? 'connected' : 'disconnected';
+    console.log('Server status:', status);
+    
+    // Optional: Add a small connection indicator to your HUD
+    const hud = document.getElementById('hud');
+    if (hud) {
+        let statusIndicator = document.getElementById('connectionStatus');
+        if (!statusIndicator) {
+            statusIndicator = document.createElement('div');
+            statusIndicator.id = 'connectionStatus';
+            statusIndicator.style.position = 'absolute';
+            statusIndicator.style.top = '10px';
+            statusIndicator.style.right = '10px';
+            statusIndicator.style.padding = '5px 10px';
+            statusIndicator.style.borderRadius = '5px';
+            statusIndicator.style.fontSize = '12px';
+            hud.appendChild(statusIndicator);
+        }
+        statusIndicator.textContent = `Server: ${status}`;
+        statusIndicator.style.background = connected ? 'green' : 'red';
+        statusIndicator.style.color = 'white';
+    }
+}
+
+// Show high score notification
+function showHighScoreNotification(highScoreData) {
+    if (highScoreData.playerId === gameState.playerId) {
+        // Create a temporary notification
+        const notification = document.createElement('div');
+        notification.style.position = 'fixed';
+        notification.style.top = '50%';
+        notification.style.left = '50%';
+        notification.style.transform = 'translate(-50%, -50%)';
+        notification.style.background = 'gold';
+        notification.style.padding = '20px';
+        notification.style.borderRadius = '10px';
+        notification.style.zIndex = '1000';
+        notification.style.fontWeight = 'bold';
+        notification.style.textAlign = 'center';
+        notification.innerHTML = `
+            🎉 NEW HIGH SCORE!<br>
+            ${highScoreData.score} points as ${highScoreData.role}<br>
+            Difficulty: ${highScoreData.difficulty}
+        `;
+        
+        document.body.appendChild(notification);
+        
+        setTimeout(() => {
+            document.body.removeChild(notification);
+        }, 5000);
+    }
+}
+
+// Synchronize game state from server
+function syncGameState(gameData) {
+    // Merge server game state with local state for multiplayer synchronization
+    if (gameData.players) {
+        gameState.players = gameData.players;
+    }
+    if (gameData.balls) {
+        gameState.balls = gameData.balls;
+    }
+    if (gameData.scores) {
+        gameState.scores = gameData.scores;
+    }
+}
+
+// Handle score update response
+function handleScoreUpdateResponse(response) {
+    if (response.ok) {
+        console.log('Score updated successfully via socket');
+    } else {
+        console.error('Score update failed:', response.error);
+    }
+}
+
+// Modified registerPlayer function with Socket.IO integration
+async function registerPlayer(name) {
+    try {
+        const response = await fetch('/api/start', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ name })
+        });
+
+        if (response.ok) {
+            const data = await response.json();
+            gameState.playerId = data.player.id;
+            gameState.playerName = data.player.name;
+            
+            // Initialize Socket.IO after successful registration
+            initializeSocketIO();
+            
+            return true;
+        } else {
+            throw new Error('Registration failed');
+        }
+    } catch (error) {
+        console.error('Registration error:', error);
+        return false;
+    }
+}
+
+// Modified updateScore function with Socket.IO integration
+async function updateScore(score, result = null) {
+  if (!gameState.playerId) return;
+
+  const scoreData = {
+    playerId: gameState.playerId,
+    playerName: gameState.playerName, // ADD THIS LINE
+    role: gameState.role,
+    difficulty: gameState.difficulty,
+    score: score,
+    result: result
+  };
+
+  try {
+    // Use REST API for score updates
+    const response = await fetch('/api/score', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(scoreData)
+    });
+
+    if (response.ok) {
+      const result = await response.json();
+      console.log('Score updated:', result);
+      return result;
+    }
+  } catch (error) {
+    console.error('Score update error:', error);
+  }
+}
+
+// Modified showLeaderboard function with real-time updates
+async function showLeaderboard() {
+    try {
+        const role = gameState.role;
+        const difficulty = gameState.difficulty;
+        const response = await fetch(`/api/leaderboard?role=${role}&difficulty=${difficulty}&limit=10`);
+        
+        if (response.ok) {
+            const leaderboardData = await response.json();
+            displayLeaderboard(leaderboardData);
+        }
+    } catch (error) {
+        console.error('Leaderboard load error:', error);
+    }
+}
+
+// Enhanced displayLeaderboard function
+// Enhanced displayLeaderboard function
+function displayLeaderboard(leaderboardData) {
+  const content = document.getElementById('leaderboardContent');
+  if (!content) return;
+
+  let html = '<table style="width:100%;border-collapse:collapse;margin:10px 0">';
+  html += `
+      <tr style="background:#f0f0f0">
+          <th style="padding:8px;text-align:left">Rank</th>
+          <th style="padding:8px;text-align:left">Player</th>
+          <th style="padding:8px;text-align:center">Score</th>
+          <th style="padding:8px;text-align:center">Wins</th>
+          <th style="padding:8px;text-align:center">Games</th>
+      </tr>
+  `;
+  
+  leaderboardData.forEach((player, index) => {
+      const isCurrentPlayer = player.player_id === gameState.playerId;
+      const rowStyle = isCurrentPlayer ? 'background-color:#e6f7ff;font-weight:bold' : '';
+      
+      html += `
+          <tr style="${rowStyle}">
+              <td style="padding:8px;border-bottom:1px solid #ddd">${index + 1}</td>
+              <td style="padding:8px;border-bottom:1px solid #ddd">${player.player_name || player.name}</td> <!-- UPDATE THIS LINE -->
+              <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${player.total_score}</td>
+              <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${player.wins}</td>
+              <td style="padding:8px;border-bottom:1px solid #ddd;text-align:center">${player.games_played}</td>
+          </tr>
+      `;
+  });
+  
+  html += '</table>';
+  content.innerHTML = html;
+}
+
+// Enhanced game over function with score submission
+function showGameOver(finalScore, result) {
+    // Update score on server
+    updateScore(finalScore, result).then(serverResponse => {
+        const finalScoreText = document.getElementById('finalScoreText');
+        if (finalScoreText) {
+            let text = `Your score: ${finalScore}`;
+            if (serverResponse && serverResponse.newHighScore) {
+                text += ' 🎉 NEW HIGH SCORE!';
+            }
+            finalScoreText.textContent = text;
+        }
+    });
+
+    // Show game over modal
+    document.getElementById('gameOverModal').classList.remove('hidden');
+}
+
+// Multiplayer game state synchronization
+function broadcastGameState() {
+    if (!gameState.gameStarted) return;
+
+    const gameData = {
+        players: gameState.players,
+        balls: gameState.balls,
+        scores: gameState.scores,
+        timestamp: Date.now()
+    };
+
+    socket.emit('gameStateUpdate', gameData);
+}
+
+// Add this to your existing game loop
+function gameLoop() {
+    // Your existing game logic here...
+    
+    // Broadcast game state for multiplayer synchronization
+    if (gameState.gameStarted) {
+        broadcastGameState();
+    }
+    
+    // Continue the game loop
+    requestAnimationFrame(gameLoop);
+}
+
+// Initialize when the page loads
+document.addEventListener('DOMContentLoaded', function() {
+    // Your existing initialization code...
+    
+    // Add Socket.IO initialization after player registration
+    const originalContinueHandler = function() {
+        const name = document.getElementById('playerName').value.trim();
+        if (!name) {
+            document.getElementById('nameError').classList.remove('hidden');
+            return;
+        }
+        
+        registerPlayer(name).then(success => {
+            if (success) {
+                // Your existing page navigation code...
+                showPage('mainMenuPage');
+            } else {
+                alert('Failed to register player. Please try again.');
+            }
+        });
+    };
+    
+    // Replace the existing continue button handler
+    document.getElementById('btnContinue').addEventListener('click', originalContinueHandler);
+});
 })();

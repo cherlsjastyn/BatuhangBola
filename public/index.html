@@ -15,7 +15,7 @@
   <div class="menu">
     <h1>BATUHANG BOLA</h1>
     <label>Enter Your Name</label>
-    <input id="playerName" placeholder="Your name" />
+    <input id="playerName" placeholder="Your name" required/>
 
     <!-- ⚠️ Error message (hidden by default) -->
     <p id="nameError" class="error hidden">⚠️ Please enter your name</p>
@@ -110,7 +110,13 @@
       </div>
     </div>
   </div>
-
+    <div id="gameScreen" style="display: none;">
+        <div id="connectionStatus" class="connection-status">Status: disconnected</div>
+        <div id="playerCount">Online Players: 0</div>
+        <div id="playerInfo"></div>
+        
+        <div id="highScoreNotification"></div>
   <script src="/game.js"></script>
+  <script src="/socket.io/socket.io.js"></script>
 </body>
 </html>
